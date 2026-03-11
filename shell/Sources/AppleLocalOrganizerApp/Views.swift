@@ -72,6 +72,18 @@ struct MenuContentView: View {
                 state.reviewFolderRenameCandidates(openWindow: openWindow)
             }
 
+            Button("ファイル名を日本語化") {
+                state.reviewFileRenameCandidates(openWindow: openWindow)
+            }
+
+            Button("未整理っぽいファイルを抽出") {
+                state.reviewAttentionFiles(openWindow: openWindow)
+            }
+
+            Button("OCR インデックスを作る") {
+                state.reviewOCRIndex(openWindow: openWindow)
+            }
+
             Button("最近の結果") {
                 state.presentWindow(
                     id: "recent-results",
@@ -190,6 +202,7 @@ struct ReviewView: View {
 
 struct SelectedFolderReviewView: View {
     @EnvironmentObject private var state: AppState
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         let run = state.selectedFolderRun
@@ -212,6 +225,19 @@ struct SelectedFolderReviewView: View {
                 Text(path)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+
+                HStack {
+                    Button("未整理だけ見る") {
+                        state.openAttentionFiles(for: path, openWindow: openWindow)
+                    }
+                    Button("ファイル名を日本語化") {
+                        state.openFileRenameCandidates(for: path, openWindow: openWindow)
+                    }
+                    Button("OCR インデックス") {
+                        state.openOCRIndex(for: path, openWindow: openWindow)
+                    }
+                }
+                .buttonStyle(.bordered)
             }
 
             Text("選んだフォルダ直下のファイルを再整理します。適用するには `すべて移動` または各行の `今すぐ移動` を使います。")
@@ -300,6 +326,213 @@ struct FolderRenameReviewView: View {
         }
         .padding()
         .frame(minWidth: 760, minHeight: 380)
+    }
+}
+
+struct FileRenameReviewView: View {
+    @EnvironmentObject private var state: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("ファイル名の日本語化候補")
+                    .font(.title2.bold())
+                Spacer()
+                Button("すべて適用") {
+                    Task { await state.applyAllFileRenames() }
+                }
+                .disabled(state.fileRenameSuggestions.isEmpty || state.isBusy)
+                Button("再読み込み") {
+                    Task { await state.loadFileRenameSuggestions() }
+                }
+                .disabled(state.fileRenameRootPath == nil)
+            }
+
+            if let path = state.fileRenameRootPath {
+                Text(path)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text("選んだフォルダ直下のファイル名を、日本語ベースの短い名前へ整える候補です。適用は手動承認です。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            if state.fileRenameSuggestions.isEmpty {
+                ContentUnavailableView("変更候補はありません", systemImage: "character.cursor.ibeam")
+            } else {
+                List(state.fileRenameSuggestions) { suggestion in
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text(suggestion.currentName)
+                                .font(.headline)
+                            Image(systemName: "arrow.right")
+                                .foregroundStyle(.secondary)
+                            Text(suggestion.proposedFileName)
+                                .font(.headline)
+                            Spacer()
+                        }
+                        Text(suggestion.reason)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        HStack {
+                            Button("今すぐ変更") {
+                                Task { await state.applyFileRename(suggestion) }
+                            }
+                            .disabled(state.isBusy)
+                            Button("Finderで開く") {
+                                state.revealInFinder(path: suggestion.sourcePath)
+                            }
+                            Button("変更後の名前をコピー") {
+                                state.copy(suggestion.proposedFileName)
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    .padding(.vertical, 6)
+                }
+            }
+        }
+        .padding()
+        .frame(minWidth: 780, minHeight: 380)
+    }
+}
+
+struct AttentionFilesReviewView: View {
+    @EnvironmentObject private var state: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("要確認ファイル")
+                    .font(.title2.bold())
+                Spacer()
+                Button("再読み込み") {
+                    Task { await state.loadAttentionFileSuggestions() }
+                }
+                .disabled(state.attentionFileRootPath == nil)
+            }
+
+            if let path = state.attentionFileRootPath {
+                Text(path)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text("名前が汎用的、または仕分け根拠が弱いファイルだけを抽出しています。中身を見てから手動で移動できます。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            if state.attentionFileSuggestions.isEmpty {
+                ContentUnavailableView("要確認のファイルはありません", systemImage: "checkmark.circle")
+            } else {
+                List(state.attentionFileSuggestions) { suggestion in
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text(suggestion.currentName)
+                                .font(.headline)
+                            Spacer()
+                            Text("\(Int(suggestion.confidence * 100))%")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Text("提案先: \(suggestion.suggestedFolderName)")
+                            .font(.subheadline)
+                        Text(suggestion.reason)
+                            .font(.body)
+                        Text(suggestion.evidenceSummary)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(3)
+                        HStack {
+                            Button("AIで要約") {
+                                Task { await state.summarizeAttentionFile(suggestion) }
+                            }
+                            .disabled(state.isBusy)
+                            Button("今すぐ移動") {
+                                Task { await state.applyAttentionSuggestion(suggestion) }
+                            }
+                            .disabled(state.isBusy)
+                            Button("Finderで開く") {
+                                state.revealInFinder(path: suggestion.sourcePath)
+                            }
+                            Button("理由をコピー") {
+                                state.copy(suggestion.reason)
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    .padding(.vertical, 6)
+                }
+            }
+        }
+        .padding()
+        .frame(minWidth: 780, minHeight: 420)
+    }
+}
+
+struct OCRIndexReviewView: View {
+    @EnvironmentObject private var state: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("OCR インデックス")
+                    .font(.title2.bold())
+                Spacer()
+                Button("全文をコピー") {
+                    state.copyOCRIndexMarkdown()
+                }
+                .disabled(state.ocrIndexMarkdown.isEmpty)
+                Button("Markdownを書き出す") {
+                    Task { await state.exportOCRIndexMarkdown() }
+                }
+                .disabled(state.ocrIndexMarkdown.isEmpty || state.isBusy)
+                Button("再読み込み") {
+                    Task { await state.loadOCRIndex() }
+                }
+                .disabled(state.ocrIndexRootPath == nil)
+            }
+
+            if let path = state.ocrIndexRootPath {
+                Text(path)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text("選んだフォルダ配下の PDF / 画像から文字を抜き、あとで探しやすい Markdown インデックスを作ります。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            if state.ocrIndexEntries.isEmpty {
+                ContentUnavailableView("OCR インデックスはまだありません", systemImage: "text.viewfinder")
+            } else {
+                List(state.ocrIndexEntries) { entry in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(entry.relativePath)
+                            .font(.headline)
+                        Text(entry.evidenceSummary)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        Text(entry.extractedText)
+                            .font(.footnote.monospaced())
+                            .lineLimit(6)
+                        HStack {
+                            Button("抜き出し全文をコピー") {
+                                state.copy(entry.extractedText)
+                            }
+                            Button("Finderで開く") {
+                                state.revealInFinder(path: entry.sourcePath)
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    .padding(.vertical, 6)
+                }
+            }
+        }
+        .padding()
+        .frame(minWidth: 820, minHeight: 460)
     }
 }
 

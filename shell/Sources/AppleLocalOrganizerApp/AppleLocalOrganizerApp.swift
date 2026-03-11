@@ -57,6 +57,30 @@ struct AppleLocalOrganizerApp: App {
                 })
         }
 
+        WindowGroup("ファイル名の日本語化候補", id: "rename-files") {
+            FileRenameReviewView()
+                .environmentObject(state)
+                .background(WindowAccessor { window in
+                    state.configurePresentation(for: window)
+                })
+        }
+
+        WindowGroup("要確認ファイル", id: "attention-files") {
+            AttentionFilesReviewView()
+                .environmentObject(state)
+                .background(WindowAccessor { window in
+                    state.configurePresentation(for: window)
+                })
+        }
+
+        WindowGroup("OCR インデックス", id: "ocr-index") {
+            OCRIndexReviewView()
+                .environmentObject(state)
+                .background(WindowAccessor { window in
+                    state.configurePresentation(for: window)
+                })
+        }
+
         WindowGroup("最近の結果", id: "recent-results") {
             RecentResultsView()
                 .environmentObject(state)

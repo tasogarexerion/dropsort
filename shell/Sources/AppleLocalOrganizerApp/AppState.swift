@@ -36,6 +36,13 @@ final class AppState: ObservableObject {
     @Published var selectedFolderPath: String?
     @Published var folderRenameSuggestions: [FolderRenameSuggestion] = []
     @Published var renameReviewRootPath: String?
+    @Published var fileRenameSuggestions: [FileRenameSuggestion] = []
+    @Published var fileRenameRootPath: String?
+    @Published var attentionFileSuggestions: [AttentionFileSuggestion] = []
+    @Published var attentionFileRootPath: String?
+    @Published var ocrIndexEntries: [OCRIndexEntry] = []
+    @Published var ocrIndexRootPath: String?
+    @Published var ocrIndexMarkdown = ""
     @Published var lastError: String?
     @Published var lastNotice: String?
     @Published var isBusy = false
@@ -215,6 +222,101 @@ final class AppState: ObservableObject {
             : "\(folderRenameSuggestions.count) 件のフォルダ名候補を確認できます。"
     }
 
+    func reviewFileRenameCandidates(openWindow: OpenWindowAction) {
+        guard let path = chooseFolderPath(prompt: "日本語化", message: "直下ファイルの名前を日本語ベースへ整えたいフォルダを選んでください。") else {
+            return
+        }
+        openFileRenameCandidates(for: path, openWindow: openWindow)
+    }
+
+    func openFileRenameCandidates(for path: String, openWindow: OpenWindowAction) {
+        fileRenameRootPath = path
+        presentWindow(
+            id: "rename-files",
+            title: "ファイル名の日本語化候補",
+            openWindow: openWindow
+        ) { [weak self] in
+            await self?.loadFileRenameSuggestions()
+        }
+    }
+
+    func loadFileRenameSuggestions() async {
+        guard let path = fileRenameRootPath else {
+            return
+        }
+        await runBusyTask { [self] in
+            let suggestions = try await buildFileRenameSuggestions(rootPath: path)
+            fileRenameSuggestions = suggestions
+            lastNotice = suggestions.isEmpty
+                ? "日本語化しやすいファイル名候補は見つかりませんでした。"
+                : "\(suggestions.count) 件のファイル名候補を確認できます。"
+        }
+    }
+
+    func reviewAttentionFiles(openWindow: OpenWindowAction) {
+        guard let path = chooseFolderPath(prompt: "抽出", message: "未整理っぽいファイルを抽出したいフォルダを選んでください。") else {
+            return
+        }
+        openAttentionFiles(for: path, openWindow: openWindow)
+    }
+
+    func openAttentionFiles(for path: String, openWindow: OpenWindowAction) {
+        attentionFileRootPath = path
+        presentWindow(
+            id: "attention-files",
+            title: "要確認ファイル",
+            openWindow: openWindow
+        ) { [weak self] in
+            await self?.loadAttentionFileSuggestions()
+        }
+    }
+
+    func loadAttentionFileSuggestions() async {
+        guard let path = attentionFileRootPath else {
+            return
+        }
+        await runBusyTask { [self] in
+            let run = try await self.bridge.scanFolder(path: path)
+            let suggestions = buildAttentionFileSuggestions(from: run)
+            attentionFileSuggestions = suggestions
+            lastNotice = suggestions.isEmpty
+                ? "要確認のファイルは見つかりませんでした。"
+                : "\(suggestions.count) 件の要確認ファイルを抽出しました。"
+        }
+    }
+
+    func reviewOCRIndex(openWindow: OpenWindowAction) {
+        guard let path = chooseFolderPath(prompt: "作成", message: "OCR インデックスを作りたいフォルダを選んでください。") else {
+            return
+        }
+        openOCRIndex(for: path, openWindow: openWindow)
+    }
+
+    func openOCRIndex(for path: String, openWindow: OpenWindowAction) {
+        ocrIndexRootPath = path
+        presentWindow(
+            id: "ocr-index",
+            title: "OCR インデックス",
+            openWindow: openWindow
+        ) { [weak self] in
+            await self?.loadOCRIndex()
+        }
+    }
+
+    func loadOCRIndex() async {
+        guard let path = ocrIndexRootPath else {
+            return
+        }
+        await runBusyTask { [self] in
+            let entries = try await buildOCRIndexEntries(rootPath: path)
+            ocrIndexEntries = entries
+            ocrIndexMarkdown = buildOCRIndexMarkdown(entries: entries, rootPath: path)
+            lastNotice = entries.isEmpty
+                ? "OCR で拾える PDF / 画像は見つかりませんでした。"
+                : "\(entries.count) 件の OCR インデックスを更新しました。"
+        }
+    }
+
     func applyAllSuggestions(for target: ScanTarget) async {
         guard let run = currentRun(for: target), !run.suggestions.isEmpty else {
             return
@@ -266,6 +368,83 @@ final class AppState: ObservableObject {
             _ = try applyFolderRename(suggestion, under: rootPath)
             folderRenameSuggestions = buildFolderRenameSuggestions(rootPath: rootPath)
             lastNotice = "\(suggestion.currentName) を \(suggestion.proposedName) へ変更しました。"
+        }
+    }
+
+    func applyAllFileRenames() async {
+        guard let rootPath = fileRenameRootPath, !fileRenameSuggestions.isEmpty else {
+            return
+        }
+        await runBusyTask { [self] in
+            var applied = 0
+            for suggestion in fileRenameSuggestions {
+                if try applyFileRename(suggestion, under: rootPath) {
+                    applied += 1
+                }
+            }
+            let refreshed = try await buildFileRenameSuggestions(rootPath: rootPath)
+            fileRenameSuggestions = refreshed
+            lastNotice = applied == 0
+                ? "ファイル名は変更されませんでした。"
+                : "\(applied) 件のファイル名を日本語ベースへ変更しました。"
+        }
+    }
+
+    func applyFileRename(_ suggestion: FileRenameSuggestion) async {
+        guard let rootPath = fileRenameRootPath else {
+            return
+        }
+        await runBusyTask { [self] in
+            _ = try applyFileRename(suggestion, under: rootPath)
+            let refreshed = try await buildFileRenameSuggestions(rootPath: rootPath)
+            fileRenameSuggestions = refreshed
+            lastNotice = "\(suggestion.currentName) を \(suggestion.proposedFileName) へ変更しました。"
+        }
+    }
+
+    func applyAttentionSuggestion(_ suggestion: AttentionFileSuggestion) async {
+        guard let rootPath = attentionFileRootPath else {
+            return
+        }
+        let organizerSuggestion = OrganizerSuggestion(
+            source_path: suggestion.sourcePath,
+            target_folder_name: suggestion.suggestedFolderName,
+            is_new_folder: true,
+            reason_ja: suggestion.reason,
+            evidence_summary: suggestion.evidenceSummary,
+            confidence: suggestion.confidence,
+            suggested_tags: suggestion.suggestedTags,
+            suggested_tag_color: suggestion.suggestedTagColor,
+            priority: suggestion.priority
+        )
+        await applySuggestions([organizerSuggestion], sourceRoot: rootPath)
+        await loadAttentionFileSuggestions()
+    }
+
+    func summarizeAttentionFile(_ suggestion: AttentionFileSuggestion) async {
+        await summarizeFileAtPath(suggestion.sourcePath, presentAlert: true)
+    }
+
+    func copyOCRIndexMarkdown() {
+        guard !ocrIndexMarkdown.isEmpty else {
+            return
+        }
+        copy(ocrIndexMarkdown)
+        lastNotice = "OCR インデックス全文をクリップボードにコピーしました。"
+    }
+
+    func exportOCRIndexMarkdown() async {
+        guard let rootPath = ocrIndexRootPath, !ocrIndexMarkdown.isEmpty else {
+            return
+        }
+        await runBusyTask { [self] in
+            let rootURL = URL(fileURLWithPath: rootPath, isDirectory: true)
+            let destination = nextAvailableFileURL(
+                rootURL.appendingPathComponent("DropSort OCRインデックス").appendingPathExtension("md")
+            )
+            try ocrIndexMarkdown.write(to: destination, atomically: true, encoding: .utf8)
+            lastNotice = "\(destination.lastPathComponent) を書き出しました。"
+            revealInFinder(path: destination.path)
         }
     }
 
@@ -542,6 +721,155 @@ final class AppState: ObservableObject {
         }
     }
 
+    private func buildFileRenameSuggestions(rootPath: String) async throws -> [FileRenameSuggestion] {
+        let files = enumerateFiles(
+            rootPath: rootPath,
+            recursive: false,
+            allowedExtensions: nil,
+            limit: 60
+        )
+        var suggestions: [FileRenameSuggestion] = []
+        for fileURL in files {
+            guard shouldOfferRenameSuggestion(for: fileURL) else {
+                continue
+            }
+            guard let suggestion = try await makeFileRenameSuggestion(for: fileURL) else {
+                continue
+            }
+            suggestions.append(suggestion)
+        }
+        return suggestions.sorted {
+            $0.currentName.localizedStandardCompare($1.currentName) == .orderedAscending
+        }
+    }
+
+    private func makeFileRenameSuggestion(for fileURL: URL) async throws -> FileRenameSuggestion? {
+        let currentName = fileURL.lastPathComponent
+        let currentStem = fileURL.deletingPathExtension().lastPathComponent
+        let proposedBaseName: String
+        let reason: String
+
+        if environmentStatus.ai_supported {
+            let result = try await bridge.summarizeFile(
+                path: fileURL.path,
+                style: "title-and-summary",
+                length: "short",
+                instruction: "1行目のタイトルを、日本語の短いファイル名候補として自然な名詞句で返してください。18文字以内、拡張子は含めず、記号や句読点は最小限にしてください。"
+            )
+            let candidate = sanitizeFileBaseName(result.title)
+            if candidate.isEmpty {
+                return nil
+            }
+            proposedBaseName = candidate
+            reason = "内容要約から日本語のファイル名候補を作成しました。"
+        } else {
+            let extracted = try await bridge.extractFileText(path: fileURL.path)
+            let candidate = sanitizeFileBaseName(firstMeaningfulLine(from: extracted.extracted_text))
+            guard !candidate.isEmpty else {
+                return nil
+            }
+            proposedBaseName = candidate
+            reason = "抽出テキストから日本語のファイル名候補を作成しました。"
+        }
+
+        let proposedFileName = buildProposedFileName(
+            baseName: proposedBaseName,
+            originalExtension: fileURL.pathExtension
+        )
+        guard proposedFileName != currentName,
+              proposedBaseName != sanitizeFileBaseName(currentStem) else {
+            return nil
+        }
+        return FileRenameSuggestion(
+            sourcePath: fileURL.path,
+            currentName: currentName,
+            proposedFileName: proposedFileName,
+            reason: reason
+        )
+    }
+
+    private func buildAttentionFileSuggestions(from run: OrganizerRun) -> [AttentionFileSuggestion] {
+        run.suggestions
+            .filter(shouldFlagForManualReview)
+            .map { suggestion in
+                AttentionFileSuggestion(
+                    sourcePath: suggestion.source_path,
+                    currentName: URL(fileURLWithPath: suggestion.source_path).lastPathComponent,
+                    suggestedFolderName: suggestion.target_folder_name,
+                    confidence: suggestion.confidence,
+                    reason: suggestion.reason_ja,
+                    evidenceSummary: suggestion.evidence_summary,
+                    suggestedTags: suggestion.suggested_tags,
+                    suggestedTagColor: suggestion.suggested_tag_color,
+                    priority: suggestion.priority
+                )
+            }
+            .sorted {
+                if $0.priority != $1.priority {
+                    return $0.priority < $1.priority
+                }
+                if $0.confidence != $1.confidence {
+                    return $0.confidence < $1.confidence
+                }
+                return $0.currentName.localizedStandardCompare($1.currentName) == .orderedAscending
+            }
+    }
+
+    private func buildOCRIndexEntries(rootPath: String) async throws -> [OCRIndexEntry] {
+        let files = enumerateFiles(
+            rootPath: rootPath,
+            recursive: true,
+            allowedExtensions: [".pdf", ".png", ".jpg", ".jpeg", ".heic"],
+            limit: 80
+        )
+        var entries: [OCRIndexEntry] = []
+        for fileURL in files {
+            let result = try await bridge.extractFileText(path: fileURL.path)
+            let extracted = result.extracted_text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !extracted.isEmpty else {
+                continue
+            }
+            let relativePath = relativePath(from: rootPath, to: fileURL.path)
+            entries.append(
+                OCRIndexEntry(
+                    sourcePath: fileURL.path,
+                    relativePath: relativePath,
+                    sourceKind: result.source_kind,
+                    extractedText: extracted,
+                    evidenceSummary: result.evidence_summary
+                )
+            )
+        }
+        return entries.sorted {
+            $0.relativePath.localizedStandardCompare($1.relativePath) == .orderedAscending
+        }
+    }
+
+    private func buildOCRIndexMarkdown(entries: [OCRIndexEntry], rootPath: String) -> String {
+        var lines = [
+            "# DropSort OCRインデックス",
+            "",
+            "- 対象フォルダ: \(rootPath)",
+            "- 生成件数: \(entries.count)",
+            "- 生成時刻: \(ISO8601DateFormatter().string(from: Date()))",
+            "",
+        ]
+
+        for entry in entries {
+            lines.append("## \(entry.relativePath)")
+            lines.append("")
+            lines.append("- 種別: \(entry.sourceKind)")
+            lines.append("- 根拠: \(entry.evidenceSummary)")
+            lines.append("")
+            lines.append("```text")
+            lines.append(truncated(entry.extractedText, limit: 1600))
+            lines.append("```")
+            lines.append("")
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
     private func buildFolderRenameSuggestions(rootPath: String) -> [FolderRenameSuggestion] {
         let rootURL = URL(fileURLWithPath: rootPath, isDirectory: true)
         let mapping = englishFolderRenameMapping()
@@ -590,6 +918,21 @@ final class AppState: ObservableObject {
         return true
     }
 
+    private func applyFileRename(_ suggestion: FileRenameSuggestion, under rootPath: String) throws -> Bool {
+        let fileManager = FileManager.default
+        let sourceURL = URL(fileURLWithPath: suggestion.sourcePath, isDirectory: false)
+        guard fileManager.fileExists(atPath: sourceURL.path) else {
+            return false
+        }
+        let rootURL = URL(fileURLWithPath: rootPath, isDirectory: true)
+        let destinationURL = nextAvailableFileURL(rootURL.appendingPathComponent(suggestion.proposedFileName))
+        if sourceURL.path == destinationURL.path {
+            return false
+        }
+        try fileManager.moveItem(at: sourceURL, to: destinationURL)
+        return true
+    }
+
     private func nextAvailableDirectoryURL(_ url: URL) -> URL {
         let fileManager = FileManager.default
         if !fileManager.fileExists(atPath: url.path) {
@@ -610,6 +953,190 @@ final class AppState: ObservableObject {
             }
             counter += 1
         }
+    }
+
+    private func nextAvailableFileURL(_ url: URL) -> URL {
+        let fileManager = FileManager.default
+        if !fileManager.fileExists(atPath: url.path) {
+            return url
+        }
+        let directory = url.deletingLastPathComponent()
+        let stem = url.deletingPathExtension().lastPathComponent
+        let ext = url.pathExtension
+        var counter = 2
+        while true {
+            var candidate = directory.appendingPathComponent("\(stem) \(counter)")
+            if !ext.isEmpty {
+                candidate.appendPathExtension(ext)
+            }
+            if !fileManager.fileExists(atPath: candidate.path) {
+                return candidate
+            }
+            counter += 1
+        }
+    }
+
+    private func enumerateFiles(
+        rootPath: String,
+        recursive: Bool,
+        allowedExtensions: Set<String>?,
+        limit: Int
+    ) -> [URL] {
+        let rootURL = URL(fileURLWithPath: rootPath, isDirectory: true)
+        let fileManager = FileManager.default
+        var results: [URL] = []
+
+        if recursive {
+            guard let enumerator = fileManager.enumerator(
+                at: rootURL,
+                includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            ) else {
+                return []
+            }
+            for case let url as URL in enumerator {
+                guard let values = try? url.resourceValues(forKeys: [.isRegularFileKey]),
+                      values.isRegularFile == true else {
+                    continue
+                }
+                if let allowedExtensions,
+                   !allowedExtensions.contains(url.pathExtension.isEmpty ? "" : ".\(url.pathExtension.lowercased())") {
+                    continue
+                }
+                results.append(url)
+                if results.count >= limit {
+                    break
+                }
+            }
+            return results
+        }
+
+        guard let items = try? fileManager.contentsOfDirectory(
+            at: rootURL,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+        for url in items {
+            guard let values = try? url.resourceValues(forKeys: [.isRegularFileKey]),
+                  values.isRegularFile == true else {
+                continue
+            }
+            if let allowedExtensions,
+               !allowedExtensions.contains(url.pathExtension.isEmpty ? "" : ".\(url.pathExtension.lowercased())") {
+                continue
+            }
+            results.append(url)
+            if results.count >= limit {
+                break
+            }
+        }
+        return results
+    }
+
+    private func shouldOfferRenameSuggestion(for fileURL: URL) -> Bool {
+        let stem = fileURL.deletingPathExtension().lastPathComponent
+        guard !stem.isEmpty else {
+            return false
+        }
+        if stem.hasPrefix("DropSort OCRインデックス") {
+            return false
+        }
+        if isGenericFileStem(stem) {
+            return true
+        }
+        return !containsJapanese(stem)
+    }
+
+    private func shouldFlagForManualReview(_ suggestion: OrganizerSuggestion) -> Bool {
+        let fileName = URL(fileURLWithPath: suggestion.source_path).deletingPathExtension().lastPathComponent
+        if suggestion.target_folder_name == "その他" {
+            return true
+        }
+        if isGenericFileStem(fileName) {
+            return true
+        }
+        if suggestion.confidence < 0.72,
+           ["書類", "画像", "データ", "その他"].contains(suggestion.target_folder_name) {
+            return true
+        }
+        return false
+    }
+
+    private func isGenericFileStem(_ stem: String) -> Bool {
+        let lowercased = stem.lowercased()
+        let genericPatterns = [
+            "^img[_ -]?\\d+",
+            "^dsc[_ -]?\\d+",
+            "^scan[_ -]?\\d+",
+            "^document( \\d+)?$",
+            "^image( \\d+)?$",
+            "^file( \\d+)?$",
+            "^untitled( \\d+)?$",
+            "^screenshot( \\d+)?$",
+            "^スクリーンショット( \\d+)?$",
+            "^名称未設定( \\d+)?$",
+            "^photo( \\d+)?$",
+            "^img$",
+            "^scan$",
+            "^document$",
+            "^image$",
+            "^file$",
+            "^\\d{4,}$",
+        ]
+        return genericPatterns.contains { pattern in
+            lowercased.range(of: pattern, options: .regularExpression) != nil
+        }
+    }
+
+    private func containsJapanese(_ value: String) -> Bool {
+        value.range(of: "[\\p{Hiragana}\\p{Katakana}\\p{Han}]", options: .regularExpression) != nil
+    }
+
+    private func sanitizeFileBaseName(_ value: String) -> String {
+        var cleaned = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        cleaned = cleaned.replacingOccurrences(of: "\\.[A-Za-z0-9]+$", with: "", options: .regularExpression)
+        cleaned = cleaned.replacingOccurrences(of: "[\\/:*?\"<>|]", with: " ", options: .regularExpression)
+        cleaned = cleaned.replacingOccurrences(
+            of: "[^\\p{Hiragana}\\p{Katakana}\\p{Han}A-Za-z0-9 _\\-]",
+            with: " ",
+            options: .regularExpression
+        )
+        cleaned = cleaned.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+        if cleaned.count > 28 {
+            cleaned = String(cleaned.prefix(28)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return cleaned
+    }
+
+    private func buildProposedFileName(baseName: String, originalExtension: String) -> String {
+        guard !originalExtension.isEmpty else {
+            return baseName
+        }
+        return "\(baseName).\(originalExtension)"
+    }
+
+    private func firstMeaningfulLine(from value: String) -> String {
+        for line in value.split(whereSeparator: \.isNewline) {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.count >= 4 {
+                return trimmed
+            }
+        }
+        return value.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func relativePath(from rootPath: String, to path: String) -> String {
+        let rootURL = URL(fileURLWithPath: rootPath, isDirectory: true)
+        let targetURL = URL(fileURLWithPath: path)
+        let rootComponents = rootURL.standardizedFileURL.pathComponents
+        let targetComponents = targetURL.standardizedFileURL.pathComponents
+        if targetComponents.starts(with: rootComponents) {
+            return targetComponents.dropFirst(rootComponents.count).joined(separator: "/")
+        }
+        return targetURL.lastPathComponent
     }
 
     private func englishFolderRenameMapping() -> [String: String] {

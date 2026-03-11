@@ -101,6 +101,39 @@ struct FolderRenameSuggestion: Identifiable, Sendable {
     let reason: String
 }
 
+struct FileRenameSuggestion: Identifiable, Sendable {
+    let sourcePath: String
+    let currentName: String
+    let proposedFileName: String
+    let reason: String
+
+    var id: String { sourcePath }
+}
+
+struct AttentionFileSuggestion: Identifiable, Sendable {
+    let sourcePath: String
+    let currentName: String
+    let suggestedFolderName: String
+    let confidence: Double
+    let reason: String
+    let evidenceSummary: String
+    let suggestedTags: [String]
+    let suggestedTagColor: String?
+    let priority: Int
+
+    var id: String { sourcePath }
+}
+
+struct OCRIndexEntry: Identifiable, Sendable {
+    let sourcePath: String
+    let relativePath: String
+    let sourceKind: String
+    let extractedText: String
+    let evidenceSummary: String
+
+    var id: String { sourcePath }
+}
+
 struct BackgroundEvent: Identifiable, Sendable {
     let id = UUID()
     let title: String
