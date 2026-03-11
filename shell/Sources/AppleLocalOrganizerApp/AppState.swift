@@ -243,6 +243,38 @@ final class AppState: ObservableObject {
         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
     }
 
+    func activateApp() {
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func bringWindowToFront(titled title: String) {
+        activateApp()
+        if let window = NSApp.windows.first(where: { $0.title == title }) {
+            configurePresentation(for: window)
+            window.orderFrontRegardless()
+            window.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    func presentWindow(
+        id: String,
+        title: String,
+        openWindow: OpenWindowAction,
+        followUp: (@MainActor () async -> Void)? = nil
+    ) {
+        activateApp()
+        openWindow(id: id)
+        Task { @MainActor in
+            for attempt in 0..<5 {
+                bringWindowToFront(titled: title)
+                if attempt == 0 {
+                    await followUp?()
+                }
+                try? await Task.sleep(for: .milliseconds(120))
+            }
+        }
+    }
+
     func recordServiceSummary(_ result: SummaryResult) async {
         latestSummary = result
         lastNotice = "選択テキストを要約し、クリップボードにコピーしました。"
@@ -771,6 +803,12 @@ final class AppState: ObservableObject {
         watchClipboardEnabled = false
         watchScreenshotsEnabled = false
         watchPDFInboxEnabled = false
+    }
+
+    func configurePresentation(for window: NSWindow) {
+        window.collectionBehavior.insert(.moveToActiveSpace)
+        window.collectionBehavior.insert(.fullScreenAuxiliary)
+        window.isReleasedWhenClosed = false
     }
 
     private func enqueueBackgroundTask(_ operation: @escaping @MainActor () async -> Void) {

@@ -18,6 +18,9 @@ struct AppleLocalOrganizerApp: App {
         WindowGroup("ダウンロードの整理候補", id: "review-downloads") {
             ReviewView(target: .downloads)
                 .environmentObject(state)
+                .background(WindowAccessor { window in
+                    state.configurePresentation(for: window)
+                })
                 .task {
                     if state.currentRun(for: .downloads) == nil {
                         await state.review(.downloads)
@@ -28,6 +31,9 @@ struct AppleLocalOrganizerApp: App {
         WindowGroup("デスクトップの整理候補", id: "review-desktop") {
             ReviewView(target: .desktop)
                 .environmentObject(state)
+                .background(WindowAccessor { window in
+                    state.configurePresentation(for: window)
+                })
                 .task {
                     if state.currentRun(for: .desktop) == nil {
                         await state.review(.desktop)
@@ -38,6 +44,9 @@ struct AppleLocalOrganizerApp: App {
         WindowGroup("最近の結果", id: "recent-results") {
             RecentResultsView()
                 .environmentObject(state)
+                .background(WindowAccessor { window in
+                    state.configurePresentation(for: window)
+                })
                 .task {
                     await state.loadRecents()
                 }
@@ -46,6 +55,9 @@ struct AppleLocalOrganizerApp: App {
         WindowGroup("システム状況", id: "system-status") {
             StatusView()
                 .environmentObject(state)
+                .background(WindowAccessor { window in
+                    state.configurePresentation(for: window)
+                })
                 .task {
                     await state.refreshStatus()
                 }
@@ -54,6 +66,9 @@ struct AppleLocalOrganizerApp: App {
         Settings {
             PreferencesView()
                 .environmentObject(state)
+                .background(WindowAccessor { window in
+                    state.configurePresentation(for: window)
+                })
         }
     }
 }

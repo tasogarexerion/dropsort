@@ -45,21 +45,39 @@ struct MenuContentView: View {
             Divider()
 
             Button("ダウンロードを確認") {
-                openWindow(id: "review-downloads")
-                Task { await state.review(.downloads) }
+                state.presentWindow(
+                    id: "review-downloads",
+                    title: ScanTarget.downloads.windowTitle,
+                    openWindow: openWindow
+                ) {
+                    await state.review(.downloads)
+                }
             }
 
             Button("デスクトップを確認") {
-                openWindow(id: "review-desktop")
-                Task { await state.review(.desktop) }
+                state.presentWindow(
+                    id: "review-desktop",
+                    title: ScanTarget.desktop.windowTitle,
+                    openWindow: openWindow
+                ) {
+                    await state.review(.desktop)
+                }
             }
 
             Button("最近の結果") {
-                openWindow(id: "recent-results")
+                state.presentWindow(
+                    id: "recent-results",
+                    title: "最近の結果",
+                    openWindow: openWindow
+                )
             }
 
             Button("システム状況") {
-                openWindow(id: "system-status")
+                state.presentWindow(
+                    id: "system-status",
+                    title: "システム状況",
+                    openWindow: openWindow
+                )
             }
 
             SettingsLink {
