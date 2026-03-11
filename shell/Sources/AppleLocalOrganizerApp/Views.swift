@@ -144,6 +144,12 @@ struct MenuContentView: View {
                     }
                 }
             }
+
+            Divider()
+
+            Button("DropSort を終了") {
+                NSApp.terminate(nil)
+            }
         }
         .padding(14)
         .frame(width: 340)
