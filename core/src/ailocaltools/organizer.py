@@ -15,6 +15,21 @@ from .summary import SummaryClient, generate_japanese_reason
 ARCHIVE_EXTENSIONS = {".zip", ".dmg", ".pkg", ".tar", ".gz", ".7z"}
 CODE_EXTENSIONS = {".py", ".js", ".ts", ".swift", ".json", ".yaml", ".yml"}
 DOCUMENT_EXTENSIONS = TEXT_EXTENSIONS | PDF_EXTENSIONS | {".docx", ".pages"}
+AUDIO_EXTENSIONS = {".mp3", ".m4a", ".wav", ".aac", ".flac"}
+VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v"}
+
+FOLDER_SCREENSHOTS = "スクリーンショット"
+FOLDER_RECEIPTS = "領収書"
+FOLDER_IMAGES = "画像"
+FOLDER_INSTALLERS = "インストーラ"
+FOLDER_CODE = "コード"
+FOLDER_MEETING_NOTES = "議事録"
+FOLDER_DOCUMENTS = "書類"
+FOLDER_DATA = "データ"
+FOLDER_AUDIO = "音楽"
+FOLDER_VIDEO = "動画"
+FOLDER_DESIGN = "デザイン"
+FOLDER_MISC = "その他"
 
 
 def scan_folder(
@@ -166,28 +181,30 @@ def suggest_folder_name(path: Path, evidence_summary: str) -> str:
     lowered_evidence = evidence_summary.lower()
 
     if "screenshot" in name or "スクリーンショット" in path.name:
-        return "Screenshots"
+        return FOLDER_SCREENSHOTS
     if suffix in IMAGE_EXTENSIONS:
         if any(token in lowered_evidence for token in ["receipt", "invoice", "領収", "請求"]):
-            return "Receipts"
-        return "Images"
+            return FOLDER_RECEIPTS
+        return FOLDER_IMAGES
     if suffix in ARCHIVE_EXTENSIONS:
-        return "Installers"
+        return FOLDER_INSTALLERS
     if suffix in CODE_EXTENSIONS:
-        return "Code"
+        return FOLDER_CODE
     if suffix in DOCUMENT_EXTENSIONS:
         if any(token in lowered_evidence for token in ["receipt", "invoice", "領収", "請求"]):
-            return "Receipts"
+            return FOLDER_RECEIPTS
         if any(token in lowered_evidence for token in ["meeting", "議事録", "minutes"]):
-            return "Meeting Notes"
-        return "Documents"
+            return FOLDER_MEETING_NOTES
+        return FOLDER_DOCUMENTS
     if suffix in {".csv", ".xlsx", ".numbers"}:
-        return "Data"
-    if suffix in {".mp3", ".m4a", ".wav", ".mp4", ".mov"}:
-        return "Media"
+        return FOLDER_DATA
+    if suffix in AUDIO_EXTENSIONS:
+        return FOLDER_AUDIO
+    if suffix in VIDEO_EXTENSIONS:
+        return FOLDER_VIDEO
     if any(token in lowered_evidence for token in ["design", "figma", "mock", "wireframe"]):
-        return "Design Assets"
-    return _sanitize_folder_name(path.suffix.lower().replace(".", "").title() or "Misc")
+        return FOLDER_DESIGN
+    return _sanitize_folder_name(path.suffix.lower().replace(".", "").title() or FOLDER_MISC)
 
 
 def build_reason(path: Path, folder: str, evidence_summary: str) -> tuple[str, float]:
@@ -205,7 +222,7 @@ def build_reason(path: Path, folder: str, evidence_summary: str) -> tuple[str, f
         confidence += 0.15
     if len(evidence_summary) > 50:
         confidence += 0.15
-    if folder in {"Receipts", "Screenshots", "Installers"}:
+    if folder in {FOLDER_RECEIPTS, FOLDER_SCREENSHOTS, FOLDER_INSTALLERS}:
         confidence += 0.1
     return reason, min(confidence, 0.95)
 
@@ -216,25 +233,27 @@ def suggest_tags(path: Path, folder: str, evidence_summary: str) -> list[str]:
     lowered_evidence = evidence_summary.lower()
     tags: list[str] = []
 
-    if folder == "Screenshots" or "screenshot" in lowered_name or "スクリーンショット" in path.name:
+    if folder == FOLDER_SCREENSHOTS or "screenshot" in lowered_name or "スクリーンショット" in path.name:
         tags.extend(["スクリーンショット", "要確認"])
-    elif folder == "Receipts":
+    elif folder == FOLDER_RECEIPTS:
         tags.extend(["領収書", "会計"])
-    elif folder == "Installers":
+    elif folder == FOLDER_INSTALLERS:
         tags.append("インストーラ")
-    elif folder == "Code":
+    elif folder == FOLDER_CODE:
         tags.append("コード")
-    elif folder == "Documents":
+    elif folder == FOLDER_DOCUMENTS:
         tags.append("書類")
-    elif folder == "Meeting Notes":
+    elif folder == FOLDER_MEETING_NOTES:
         tags.append("議事録")
-    elif folder == "Images":
+    elif folder == FOLDER_IMAGES:
         tags.append("画像")
-    elif folder == "Data":
+    elif folder == FOLDER_DATA:
         tags.append("データ")
-    elif folder == "Media":
-        tags.append("メディア")
-    elif folder == "Design Assets":
+    elif folder == FOLDER_AUDIO:
+        tags.append("音楽")
+    elif folder == FOLDER_VIDEO:
+        tags.append("動画")
+    elif folder == FOLDER_DESIGN:
         tags.append("デザイン")
 
     if suffix == ".pdf":
@@ -258,19 +277,19 @@ def suggest_tag_color(path: Path, folder: str, evidence_summary: str) -> str | N
     lowered_name = path.name.lower()
     lowered_evidence = evidence_summary.lower()
 
-    if folder == "Receipts" or any(token in lowered_evidence for token in ["invoice", "receipt", "領収", "請求"]):
+    if folder == FOLDER_RECEIPTS or any(token in lowered_evidence for token in ["invoice", "receipt", "領収", "請求"]):
         return "red"
-    if folder == "Installers":
+    if folder == FOLDER_INSTALLERS:
         return "orange"
-    if folder == "Screenshots" or "screenshot" in lowered_name or "スクリーンショット" in path.name:
+    if folder == FOLDER_SCREENSHOTS or "screenshot" in lowered_name or "スクリーンショット" in path.name:
         return "yellow"
-    if folder in {"Documents", "Meeting Notes"}:
+    if folder in {FOLDER_DOCUMENTS, FOLDER_MEETING_NOTES}:
         return "blue"
-    if folder in {"Images", "Design Assets"}:
+    if folder in {FOLDER_IMAGES, FOLDER_DESIGN}:
         return "purple"
-    if folder in {"Code", "Data"}:
+    if folder in {FOLDER_CODE, FOLDER_DATA}:
         return "green"
-    if folder == "Media":
+    if folder in {FOLDER_AUDIO, FOLDER_VIDEO}:
         return "gray"
     return None
 
@@ -278,11 +297,11 @@ def suggest_tag_color(path: Path, folder: str, evidence_summary: str) -> str | N
 def suggest_priority(path: Path, folder: str, evidence_summary: str) -> int:
     lowered_name = path.name.lower()
     lowered_evidence = evidence_summary.lower()
-    if folder == "Receipts" or any(token in lowered_evidence for token in ["invoice", "receipt", "領収", "請求"]):
+    if folder == FOLDER_RECEIPTS or any(token in lowered_evidence for token in ["invoice", "receipt", "領収", "請求"]):
         return 1
-    if folder == "Installers":
+    if folder == FOLDER_INSTALLERS:
         return 1
-    if folder == "Screenshots" or "screenshot" in lowered_name or "スクリーンショット" in path.name:
+    if folder == FOLDER_SCREENSHOTS or "screenshot" in lowered_name or "スクリーンショット" in path.name:
         return 2
     if path.suffix.lower() == ".pdf":
         return 2
@@ -290,8 +309,8 @@ def suggest_priority(path: Path, folder: str, evidence_summary: str) -> int:
 
 
 def _sanitize_folder_name(value: str) -> str:
-    cleaned = re.sub(r"[^A-Za-z0-9 _-]+", "", value).strip()
-    return cleaned or "Misc"
+    cleaned = re.sub(r"[^A-Za-z0-9 _\-\u3040-\u30ff\u31f0-\u31ff\u3400-\u4dbf\u4e00-\u9fff]+", "", value).strip()
+    return cleaned or FOLDER_MISC
 
 
 def _next_available_destination(path: Path) -> Path:

@@ -20,17 +20,17 @@ class OrganizerTests(unittest.TestCase):
             Path("/tmp/receipt.pdf"),
             "ファイル名: receipt.pdf / 本文抜粋: Invoice from Apple Store",
         )
-        self.assertEqual(folder, "Receipts")
+        self.assertEqual(folder, "領収書")
 
     def test_build_reason(self) -> None:
-        reason, confidence = build_reason(Path("/tmp/archive.zip"), "Installers", "zip")
-        self.assertIn("Installers", reason)
+        reason, confidence = build_reason(Path("/tmp/archive.zip"), "インストーラ", "zip")
+        self.assertIn("インストーラ", reason)
         self.assertGreater(confidence, 0.5)
 
     def test_suggest_tags(self) -> None:
         tags = suggest_tags(
             Path("/tmp/スクリーンショット 2026-03-11.png"),
-            "Screenshots",
+            "スクリーンショット",
             "OCR抜粋: 請求書 Invoice",
         )
         self.assertIn("スクリーンショット", tags)
@@ -39,12 +39,12 @@ class OrganizerTests(unittest.TestCase):
     def test_suggest_tag_style(self) -> None:
         color = suggest_tag_color(
             Path("/tmp/invoice.pdf"),
-            "Receipts",
+            "領収書",
             "本文抜粋: Invoice from vendor",
         )
         priority = suggest_priority(
             Path("/tmp/invoice.pdf"),
-            "Receipts",
+            "領収書",
             "本文抜粋: Invoice from vendor",
         )
         self.assertEqual(color, "red")
@@ -59,7 +59,7 @@ class OrganizerTests(unittest.TestCase):
             run = scan_folder(root)
             after = set(path.name for path in root.iterdir())
             self.assertEqual(before, after)
-            self.assertEqual(run.suggestions[0].target_folder_name, "Screenshots")
+            self.assertEqual(run.suggestions[0].target_folder_name, "スクリーンショット")
             self.assertIn("スクリーンショット", run.suggestions[0].suggested_tags)
             self.assertEqual(run.suggestions[0].suggested_tag_color, "yellow")
             self.assertEqual(run.suggestions[0].priority, 2)
@@ -72,10 +72,10 @@ class OrganizerTests(unittest.TestCase):
 
             result = apply_suggestions(
                 root,
-                [{"source_path": str(target), "target_folder_name": "Receipts"}],
+                [{"source_path": str(target), "target_folder_name": "領収書"}],
             )
 
-            moved = root / "Receipts" / "invoice.pdf"
+            moved = root / "領収書" / "invoice.pdf"
             self.assertEqual(result.moved_count, 1)
             self.assertTrue(moved.exists())
             self.assertFalse(target.exists())
@@ -85,14 +85,14 @@ class OrganizerTests(unittest.TestCase):
             root = Path(temp_dir)
             source = root / "notes.txt"
             source.write_text("new", encoding="utf-8")
-            receipts = root / "Documents"
+            receipts = root / "書類"
             receipts.mkdir()
             existing = receipts / "notes.txt"
             existing.write_text("old", encoding="utf-8")
 
             result = apply_suggestions(
                 root,
-                [{"source_path": str(source), "target_folder_name": "Documents"}],
+                [{"source_path": str(source), "target_folder_name": "書類"}],
             )
 
             moved = receipts / "notes 2.txt"
@@ -105,15 +105,22 @@ class OrganizerTests(unittest.TestCase):
             root = Path(temp_dir)
             source = root / "main.py"
             source.write_text("print('hi')", encoding="utf-8")
-            blocking_file = root / "Code"
+            blocking_file = root / "コード"
             blocking_file.write_text("not a folder", encoding="utf-8")
 
             result = apply_suggestions(
                 root,
-                [{"source_path": str(source), "target_folder_name": "Code"}],
+                [{"source_path": str(source), "target_folder_name": "コード"}],
             )
 
-            moved = root / "Code 2" / "main.py"
+            moved = root / "コード 2" / "main.py"
             self.assertEqual(result.moved_count, 1)
             self.assertTrue(blocking_file.exists())
             self.assertTrue(moved.exists())
+
+    def test_suggest_folder_name_returns_audio_folder_in_japanese(self) -> None:
+        folder = suggest_folder_name(
+            Path("/tmp/song.mp3"),
+            "ファイル名: song.mp3",
+        )
+        self.assertEqual(folder, "音楽")
