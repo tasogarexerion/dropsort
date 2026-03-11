@@ -1,27 +1,50 @@
 # Apple Local Organizer
 
-Apple Intelligence の Foundation Models を使ったローカル要約と Finder 整理提案の実験プロジェクトです。
+Apple Intelligence の Foundation Models と Vision を使って、ローカル要約と Finder 整理提案を行う macOS 向けプロジェクトです。
+クリップボード、テキスト、PDF、画像を日本語で要約し、`Desktop` / `Downloads` の整理候補をレビューできます。
 
-GitHub にはソースコードだけでも公開できます。Developer ID 署名や notarization が未完了でも、`ad-hoc` 署名または未署名の開発者向けプレビューとして DMG を公開できます。
+このリポジトリは現在、開発者向けの public preview 段階です。
+配布は `ad-hoc` 署名のプレビューを前提に進めており、Developer ID 署名と notarization は後段で差し替え可能な構成にしています。
 
-公開時の実務手順は [PUBLISHING.md](/Users/taso/開発/オンデバイスAI/PUBLISHING.md) にまとめています。
+## 何ができるか
 
-## License
+- クリップボードの内容を日本語で要約
+- テキスト / Markdown / PDF / 画像ファイルの日本語要約
+- OCR-only PDF やスクリーンショットからの文字抽出
+- `Desktop` / `Downloads` の整理候補フォルダを提案
+- すべてをローカル実行前提で扱うワークフロー
 
-このリポジトリのソースコードは [Apple Local Organizer Community License 1.0](/Users/taso/開発/オンデバイスAI/LICENSE) です。
-個人利用、教育利用、研究利用、評価目的での利用は許可します。
-商用利用はこのライセンスには含めず、事前の問い合わせを必須とします。
-そのため、OSI 承認のオープンソースライセンスではなく、source-available の扱いです。
-ただし、Apple の SDK・フレームワーク・同梱しない外部 runtime にはそれぞれの利用条件が適用されます。
+## 現在の位置づけ
 
-## 構成
+- 実装は動作するが、一般配布より先に開発者プレビューとして公開している段階
+- Finder 整理はレビュー専用で、ファイル移動はまだ行わない
+- macOS 実機で Foundation Models / Vision が使えることを前提にしている
+- GitHub Releases に載せる DMG は、現時点では `ad-hoc` 署名のプレビュー配布を想定
 
-- `core/`: Python コア。要約、環境判定、取り込み、整理提案、履歴管理、JSON ブリッジを含みます。
-- `shell/`: SwiftUI/AppKit のメニューバーシェル。Python コアを subprocess で呼びます。
-- `fixtures/`: テスト用のサンプル生成スクリプトと生成先。
-- `release/`: 直配布用ビルドと notarization の雛形スクリプト。
+## 動作要件
 
-## 開発用の最短手順
+- Apple Silicon Mac
+- `macOS 15+` でシェル起動
+- `macOS 26+` かつ Apple Intelligence 有効環境で AI 機能を有効化
+- Python `3.10+`
+- 開発時は Xcode / Command Line Tools
+
+AI 機能を使う場合は、Apple の `apple-fm-sdk` と Vision / Foundation Models が利用可能な環境が必要です。
+
+## リポジトリ構成
+
+- `core/`
+  Python コア。要約、環境判定、取り込み、整理提案、履歴管理、JSON ブリッジを含みます。
+- `shell/`
+  SwiftUI/AppKit のメニューバーシェル。Python コアを subprocess で呼びます。
+- `fixtures/`
+  テスト用のサンプル生成スクリプトと生成先です。
+- `release/`
+  `.app` / `.dmg` 組み立て、署名、notarization 用スクリプト群です。
+- `validation/`
+  実機確認メモと検証レポート用テンプレートです。
+
+## 開発者向け最短手順
 
 ```bash
 python3 fixtures/generate_fixtures.py
@@ -45,39 +68,32 @@ PYTHONPATH=core/src python3 -m ailocaltools.cli validate-device --report validat
 `apple-fm-sdk` が使えない環境では、シェルは互換モードになり、AI 機能は無効として扱います。
 Foundation Models / Vision の実機検証は、通常の Terminal か sandbox 外の実行環境で行ってください。
 
-## 配布フロー
+## 配布と公開
+
+開発者向けプレビュー DMG は、Developer ID がなくても `ad-hoc` 署名で作成できます。
 
 ```bash
 release/build_app.sh
-DEVELOPER_ID_APP_HASH="<40 hex sha1>" release/sign_app.sh
+DEVELOPER_ID_APP=- release/sign_app.sh
 release/package_dmg.sh
-NOTARY_PROFILE="<profile>" TEAM_ID="<team>" release/notarize_app.sh --artifact release/build/AppleLocalOrganizer.dmg
-release/staple_dmg.sh release/build/AppleLocalOrganizer.dmg
+release/prepare_github_release.sh --tag "preview-YYYY-MM-DD"
 ```
 
-同梱 Python ランタイムは `vendor/python-runtime/macos-arm64/` に配置します。
-この runtime は `apple_fm_sdk` と PyObjC 依存を含む relocatable な CPython を前提にします。
-署名名を露出したくない場合は `DEVELOPER_ID_APP` ではなく `DEVELOPER_ID_APP_HASH` を使えます。
+正式配布へ切り替える場合は、Developer ID 署名と notarization を同じ release フローに差し替えます。
+公開の実務手順は [PUBLISHING.md](/Users/taso/開発/オンデバイスAI/PUBLISHING.md) にまとめています。
 
-## GitHub 公開の進め方
+## ライセンス
 
-### 1. ソースコードだけ先に公開する
+このリポジトリのソースコードは [Apple Local Organizer Community License 1.0](/Users/taso/開発/オンデバイスAI/LICENSE) です。
 
-- 署名や notarization は不要です。
-- `vendor/python-runtime/`、`release/build/`、`validation/reports/` のような生成物やローカル依存物はコミットしません。
-- GitHub Actions では `.github/workflows/ci.yml` が fixture 生成、Python テスト、Swift build を実行します。
+- 個人利用、教育利用、研究利用、評価目的での利用は許可します
+- 商用利用は含みません
+- 商用利用を希望する場合は、事前にリポジトリ所有者へ問い合わせてください
 
-### 2. 開発者向けプレビュー DMG を公開する
+そのため、このリポジトリは OSI 承認のオープンソースではなく、source-available の扱いです。
+また、Apple の SDK・フレームワーク・同梱しない外部 runtime には、それぞれの利用条件が適用されます。
 
-- Developer ID がなくても `DEVELOPER_ID_APP=- release/sign_app.sh` で ad-hoc 署名できます。
-- その後 `release/package_dmg.sh` で DMG を作り、`release/prepare_github_release.sh` で GitHub Releases 用の説明文と SHA-256 を生成します。
-- この配布物は Gatekeeper の警告が出る前提です。一般ユーザー向けの正式配布には向きません。
+## 商用利用について
 
-### 2.5. 公開前チェックを回す
-
-- `scripts/public_release_check.sh` で秘密情報の簡易検査、サイズ検査、fixture 生成、Python テスト、Swift build、Release Notes 生成確認をまとめて実行できます。
-
-### 3. 一般公開に切り替える
-
-- Developer ID 署名と notarization が用意できたら、同じ release フローで差し替えできます。
-- その場合は GitHub Releases 側の説明文だけ更新すれば足ります。
+商用利用の相談は、まず GitHub Issues / Discussions / プロフィール経由の連絡を前提にしています。
+有償サービスへの組み込み、社内業務での本番利用、SaaS / API 提供、販売物への同梱などは、事前問い合わせの対象です。
