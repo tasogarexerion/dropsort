@@ -3,8 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="${APPLE_LOCAL_AI_RELEASE_BUILD_DIR:-$ROOT_DIR/release/build}"
-APP_DIR="${APPLE_LOCAL_AI_APP_PATH:-$BUILD_DIR/AppleLocalOrganizer.app}"
-DMG_PATH="${APPLE_LOCAL_AI_DMG_PATH:-$BUILD_DIR/AppleLocalOrganizer.dmg}"
+APP_DIR="${APPLE_LOCAL_AI_APP_PATH:-$BUILD_DIR/DropSort.app}"
+DMG_PATH="${APPLE_LOCAL_AI_DMG_PATH:-$BUILD_DIR/DropSort.dmg}"
 OUTPUT_DIR="${APPLE_LOCAL_AI_GITHUB_RELEASE_DIR:-$BUILD_DIR/github-release}"
 TAG_NAME="${GITHUB_RELEASE_TAG:-preview}"
 DRY_RUN=0
@@ -65,8 +65,8 @@ DMG_NAME="$(basename "$DMG_PATH")"
 SHA256="$(shasum -a 256 "$DMG_PATH" | awk '{print $1}')"
 NOTES_PATH="$OUTPUT_DIR/GITHUB_RELEASE_NOTES.md"
 MANIFEST_PATH="$OUTPUT_DIR/github-release-manifest.json"
-PUBLIC_REPO_URL="${APPLE_LOCAL_AI_PUBLIC_REPO_URL:-https://github.com/tasogarexerion/apple-local-organizer}"
-SCREENSHOT_URL="${APPLE_LOCAL_AI_RELEASE_SCREENSHOT_URL:-https://raw.githubusercontent.com/tasogarexerion/apple-local-organizer/main/docs/images/release-preview.png}"
+PUBLIC_REPO_URL="${APPLE_LOCAL_AI_PUBLIC_REPO_URL:-https://github.com/tasogarexerion/dropsort}"
+SCREENSHOT_URL="${APPLE_LOCAL_AI_RELEASE_SCREENSHOT_URL:-https://raw.githubusercontent.com/tasogarexerion/dropsort/main/docs/images/release-preview.png}"
 
 DMG_PATH_ENV="$DMG_PATH" \
 APP_DIR_ENV="$APP_DIR" \
@@ -100,9 +100,9 @@ else:
         "右クリックから「開く」または「システム設定 > プライバシーとセキュリティ」で許可してください。"
     )
 
-notes = f"""# Apple Local Organizer {tag_name}
+notes = f"""# DropSort {tag_name}
 
-Apple Intelligence を使った、ローカル要約と Finder 整理提案の macOS メニューバーアプリです。
+Downloads や Desktop にファイルをためがちな人向けの、ローカル要約と整理をワンクリックに寄せる macOS メニューバーアプリです。
 
 ![Preview image]({screenshot_url})
 
@@ -115,9 +115,11 @@ Apple Intelligence を使った、ローカル要約と Finder 整理提案の m
 
 - クリップボードやテキスト / PDF / 画像の日本語要約
 - Desktop / Downloads の整理候補レビューと移動
+- Finder 右クリックからの OCR テキストコピーと要約コピー
 - 完全オンデバイス前提の Foundation Models / Vision ワークフロー
 - Finder の右クリックから `このアプリで開く` による要約
 - 対応アプリの選択テキストを右クリック `サービス` から要約
+- メニューバーからの Quick Sort Downloads / Desktop
 - Desktop / Downloads の FSEvents 常駐監視、スクリーンショット要約、PDF 受信箱ウォッチ
 - クリップボードの常駐インサイトと Finder タグ提案
 - Finder タグの priority / color 提案
@@ -134,7 +136,7 @@ Apple Intelligence を使った、ローカル要約と Finder 整理提案の m
 
 ## 既知の前提
 
-- Finder 整理はレビュー画面からそのまま適用できます。
+- Finder 整理はレビュー画面だけでなくメニューバーからも即適用できます。
 - Foundation Models / Vision の動作確認は実機前提です。
 - 開発者向けプレビューとしての配布を想定しています。
 

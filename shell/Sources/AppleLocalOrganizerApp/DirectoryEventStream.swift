@@ -58,7 +58,7 @@ final class DirectoryEventStream {
             flags
         ) else {
             throw NSError(
-                domain: "AppleLocalOrganizer",
+                domain: "DropSort",
                 code: 500,
                 userInfo: [NSLocalizedDescriptionKey: "FSEventStream を作成できませんでした: \(path)"]
             )
@@ -69,7 +69,7 @@ final class DirectoryEventStream {
             FSEventStreamInvalidate(stream)
             FSEventStreamRelease(stream)
             throw NSError(
-                domain: "AppleLocalOrganizer",
+                domain: "DropSort",
                 code: 501,
                 userInfo: [NSLocalizedDescriptionKey: "FSEventStream を開始できませんでした: \(path)"]
             )

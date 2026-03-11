@@ -6,7 +6,7 @@ struct MenuContentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Apple Local Organizer")
+            Text("DropSort")
                 .font(.headline)
 
             statusBlock
@@ -24,6 +24,23 @@ struct MenuContentView: View {
                 Task { await state.summarizeFile() }
             }
             .disabled(!state.environmentStatus.ai_supported || state.isBusy)
+
+            Button("Copy Text From File") {
+                Task { await state.copyExtractedTextFromFile() }
+            }
+            .disabled(!state.environmentStatus.ai_supported || state.isBusy)
+
+            Divider()
+
+            Button("Quick Sort Downloads") {
+                Task { await state.quickSort(.downloads) }
+            }
+            .disabled(state.isBusy)
+
+            Button("Quick Sort Desktop") {
+                Task { await state.quickSort(.desktop) }
+            }
+            .disabled(state.isBusy)
 
             Divider()
 

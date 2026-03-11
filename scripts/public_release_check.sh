@@ -85,14 +85,14 @@ if ! HOME="$ROOT_DIR/.swiftpm-home" \
 fi
 
 section "Release notes preview"
-if [[ -f release/build/AppleLocalOrganizer.dmg ]]; then
+if [[ -f release/build/DropSort.dmg ]]; then
   if ! release/prepare_github_release.sh --tag "preview-check" >/dev/null; then
     mark_failure
   else
     echo "Prepared GitHub release notes from the current DMG."
   fi
 else
-  echo "Skipped: release/build/AppleLocalOrganizer.dmg does not exist yet."
+  echo "Skipped: release/build/DropSort.dmg does not exist yet."
 fi
 
 section "Summary"

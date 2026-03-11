@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import sys
+from datetime import datetime, timezone
 from typing import Any
 
 from .environment import check_environment
@@ -47,6 +48,19 @@ async def handle_request(envelope: RequestEnvelope) -> dict[str, Any]:
         result = await summarize_ingested(content, cfg)
         history.save_summary(result)
         return to_dict(result)
+
+    if envelope.type == "ExtractFileText":
+        path = envelope.payload["path"]
+        content = ingest_path(path)
+        return to_dict(
+            {
+                "title": os.path.basename(path),
+                "source_kind": content.source_kind,
+                "extracted_text": content.text.strip(),
+                "evidence_summary": content.evidence_summary,
+                "created_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+            }
+        )
 
     if envelope.type == "ScanFolder":
         history = _history_store()

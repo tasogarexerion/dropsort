@@ -3,13 +3,13 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="${APPLE_LOCAL_AI_RELEASE_BUILD_DIR:-$ROOT_DIR/release/build}"
-APP_DIR="$BUILD_DIR/AppleLocalOrganizer.app"
+APP_DIR="$BUILD_DIR/DropSort.app"
 APP_CONTENTS="$APP_DIR/Contents"
 APP_RESOURCES="$APP_CONTENTS/Resources"
 APP_MACOS="$APP_CONTENTS/MacOS"
 APP_BINARY="$APP_MACOS/AppleLocalOrganizerApp"
 APP_VERSION="${APPLE_LOCAL_AI_APP_VERSION:-0.1.1}"
-BUNDLE_ID="com.taso.apple-local-organizer"
+BUNDLE_ID="com.taso.dropsort"
 PYTHON_RUNTIME_SRC="${APPLE_LOCAL_AI_VENDOR_PYTHON:-$ROOT_DIR/vendor/python-runtime/macos-arm64}"
 SWIFT_BINARY_OVERRIDE="${APPLE_LOCAL_AI_SWIFT_BINARY:-}"
 DRY_RUN=0
@@ -66,7 +66,7 @@ function write_info_plist() {
   <key>CFBundleDevelopmentRegion</key>
   <string>ja</string>
   <key>CFBundleDisplayName</key>
-  <string>Apple Local Organizer</string>
+  <string>DropSort</string>
   <key>CFBundleExecutable</key>
   <string>AppleLocalOrganizerApp</string>
   <key>CFBundleIdentifier</key>
@@ -77,7 +77,7 @@ function write_info_plist() {
   <array>
     <dict>
       <key>CFBundleTypeName</key>
-      <string>Apple Local Organizer Supported Files</string>
+      <string>DropSort Supported Files</string>
       <key>CFBundleTypeRole</key>
       <string>Viewer</string>
       <key>LSHandlerRank</key>
@@ -97,12 +97,12 @@ function write_info_plist() {
       <key>NSMenuItem</key>
       <dict>
         <key>default</key>
-        <string>選択テキストを要約</string>
+        <string>DropSort AIで選択テキストを要約</string>
       </dict>
       <key>NSMessage</key>
       <string>summarizeSelectedText:userData:error:</string>
       <key>NSPortName</key>
-      <string>Apple Local Organizer</string>
+      <string>DropSort</string>
       <key>NSSendTypes</key>
       <array>
         <string>public.utf8-plain-text</string>
@@ -112,9 +112,41 @@ function write_info_plist() {
         <string>public.utf8-plain-text</string>
       </array>
     </dict>
+    <dict>
+      <key>NSMenuItem</key>
+      <dict>
+        <key>default</key>
+        <string>DropSort AIでファイルを要約してコピー</string>
+      </dict>
+      <key>NSMessage</key>
+      <string>summarizeSelectedFiles:userData:error:</string>
+      <key>NSPortName</key>
+      <string>DropSort</string>
+      <key>NSSendTypes</key>
+      <array>
+        <string>public.file-url</string>
+        <string>NSFilenamesPboardType</string>
+      </array>
+    </dict>
+    <dict>
+      <key>NSMenuItem</key>
+      <dict>
+        <key>default</key>
+        <string>DropSort AIでOCRテキストをコピー</string>
+      </dict>
+      <key>NSMessage</key>
+      <string>copyExtractedTextFromFiles:userData:error:</string>
+      <key>NSPortName</key>
+      <string>DropSort</string>
+      <key>NSSendTypes</key>
+      <array>
+        <string>public.file-url</string>
+        <string>NSFilenamesPboardType</string>
+      </array>
+    </dict>
   </array>
   <key>CFBundleName</key>
-  <string>Apple Local Organizer</string>
+  <string>DropSort</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>

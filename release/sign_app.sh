@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="${APPLE_LOCAL_AI_RELEASE_BUILD_DIR:-$ROOT_DIR/release/build}"
-APP_DIR="${APPLE_LOCAL_AI_APP_PATH:-$BUILD_DIR/AppleLocalOrganizer.app}"
+APP_DIR="${APPLE_LOCAL_AI_APP_PATH:-$BUILD_DIR/DropSort.app}"
 DRY_RUN=0
 SIGN_IDENTITY=""
 SIGN_IDENTITY_MODE=""

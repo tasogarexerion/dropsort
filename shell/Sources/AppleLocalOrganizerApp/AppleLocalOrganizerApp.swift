@@ -6,7 +6,7 @@ struct AppleLocalOrganizerApp: App {
     @StateObject private var state = AppState.shared
 
     var body: some Scene {
-        MenuBarExtra("Apple Local Organizer", systemImage: "sparkles.rectangle.stack") {
+        MenuBarExtra("DropSort", systemImage: "sparkles.rectangle.stack") {
             MenuContentView()
                 .environmentObject(state)
                 .task {

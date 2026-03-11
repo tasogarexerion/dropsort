@@ -11,13 +11,12 @@ from .models import OrganizerRun, OrganizerSuggestion, RecentResults, SummaryRes
 
 
 def default_db_path() -> Path:
-    return (
-        Path.home()
-        / "Library"
-        / "Application Support"
-        / "AppleLocalOrganizer"
-        / "history.sqlite3"
-    )
+    support_root = Path.home() / "Library" / "Application Support"
+    current = support_root / "DropSort" / "history.sqlite3"
+    legacy = support_root / "AppleLocalOrganizer" / "history.sqlite3"
+    if not current.exists() and legacy.exists():
+        return legacy
+    return current
 
 
 class HistoryStore:
@@ -30,7 +29,7 @@ class HistoryStore:
             path.parent.mkdir(parents=True, exist_ok=True)
             return path
         except PermissionError:
-            fallback = Path(tempfile.gettempdir()) / "AppleLocalOrganizer" / "history.sqlite3"
+            fallback = Path(tempfile.gettempdir()) / "DropSort" / "history.sqlite3"
             fallback.parent.mkdir(parents=True, exist_ok=True)
             return fallback
 

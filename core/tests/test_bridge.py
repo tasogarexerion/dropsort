@@ -80,6 +80,20 @@ class HandleRequestTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result["source_root"], str(target.resolve()))
             self.assertEqual(len(result["suggestions"]), 1)
 
+    async def test_extract_file_text_returns_ingested_content(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target = Path(temp_dir) / "note.txt"
+            target.write_text("hello from text", encoding="utf-8")
+            result = await bridge.handle_request(
+                bridge.RequestEnvelope(
+                    type="ExtractFileText",
+                    payload={"path": str(target)},
+                )
+            )
+            self.assertEqual(result["title"], "note.txt")
+            self.assertEqual(result["source_kind"], "text")
+            self.assertEqual(result["extracted_text"], "hello from text")
+
     async def test_apply_suggestions_moves_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             target = Path(temp_dir) / "scan"

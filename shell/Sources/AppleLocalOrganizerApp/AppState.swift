@@ -130,6 +130,15 @@ final class AppState: ObservableObject {
         await summarizeFileAtPath(url.path, presentAlert: true)
     }
 
+    func copyExtractedTextFromFile() async {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url else {
+            return
+        }
+        await copyExtractedTextFromPath(url.path, presentAlert: true)
+    }
+
     func review(_ target: ScanTarget) async {
         await runBusyTask { [self] in
             let result = try await self.bridge.scanFolder(path: target.defaultPath)
@@ -152,6 +161,39 @@ final class AppState: ObservableObject {
 
     func applySuggestion(_ suggestion: OrganizerSuggestion, for target: ScanTarget) async {
         await applySuggestions([suggestion], sourceRoot: target.defaultPath, target: target)
+    }
+
+    func quickSort(_ target: ScanTarget) async {
+        await runBusyTask { [self] in
+            let run = try await self.bridge.scanFolder(path: target.defaultPath)
+            switch target {
+            case .downloads:
+                self.downloadsRun = run
+            case .desktop:
+                self.desktopRun = run
+            }
+            guard !run.suggestions.isEmpty else {
+                self.lastNotice = "\(target.rawValue) は整理不要でした。"
+                await self.loadRecents()
+                return
+            }
+            let result = try await self.bridge.applySuggestions(
+                sourceRoot: run.source_root,
+                suggestions: run.suggestions
+            )
+            let taggedCount = self.autoApplySuggestedTagsOnMove
+                ? self.applySuggestedTagsAfterMove(items: result.items, suggestions: run.suggestions)
+                : 0
+            self.lastNotice = "\(target.rawValue) をワンクリック整理しました。\(self.notice(for: result, taggedCount: taggedCount))"
+            let refreshed = try await self.bridge.scanFolder(path: target.defaultPath)
+            switch target {
+            case .downloads:
+                self.downloadsRun = refreshed
+            case .desktop:
+                self.desktopRun = refreshed
+            }
+            await self.loadRecents()
+        }
     }
 
     func loadRecents() async {
@@ -193,6 +235,12 @@ final class AppState: ObservableObject {
         lastNotice = "選択テキストを要約し、クリップボードにコピーしました。"
         copy(result.summary_text)
         await loadRecents()
+    }
+
+    func recordExtractedTextCopy(_ result: ExtractedTextResult, copiedText: String) {
+        let fileLabel = result.title.isEmpty ? "ファイル" : result.title
+        lastNotice = "\(fileLabel) の抽出テキストをクリップボードにコピーしました。"
+        copy(copiedText)
     }
 
     func applySuggestedTags(_ suggestion: OrganizerSuggestion, pathOverride: String? = nil) async {
@@ -247,8 +295,8 @@ final class AppState: ObservableObject {
             }
             self.lastNotice = "\(files.count) 件のファイルを要約しました。Recent Results を確認してください。"
             await self.loadRecents()
-            self.presentAlert(
-                title: "Apple Local Organizer",
+                self.presentAlert(
+                title: "DropSort",
                 message: "\(files.count) 件のファイルを要約しました。Recent Results から確認できます。"
             )
         }
@@ -273,6 +321,27 @@ final class AppState: ObservableObject {
                 self.presentAlert(
                     title: result.title,
                     message: truncated(result.summary_text, limit: 900)
+                )
+            }
+        }
+    }
+
+    private func copyExtractedTextFromPath(_ path: String, presentAlert: Bool) async {
+        await runBusyTask { [self] in
+            let result = try await self.bridge.extractFileText(path: path)
+            let extracted = result.extracted_text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !extracted.isEmpty else {
+                throw NSError(
+                    domain: "DropSort",
+                    code: 422,
+                    userInfo: [NSLocalizedDescriptionKey: "抽出できるテキストが見つかりませんでした。"]
+                )
+            }
+            self.recordExtractedTextCopy(result, copiedText: extracted)
+            if presentAlert {
+                self.presentAlert(
+                    title: result.title,
+                    message: truncated(extracted, limit: 900)
                 )
             }
         }
@@ -595,7 +664,7 @@ final class AppState: ObservableObject {
         var url = URL(fileURLWithPath: path)
         guard FileManager.default.fileExists(atPath: url.path) else {
             throw NSError(
-                domain: "AppleLocalOrganizer",
+                domain: "DropSort",
                 code: 404,
                 userInfo: [NSLocalizedDescriptionKey: "タグ適用先のファイルが見つかりません: \(path)"]
             )

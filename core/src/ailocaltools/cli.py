@@ -12,7 +12,7 @@ from .validation import validate_device
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Apple Local Organizer core CLI")
+    parser = argparse.ArgumentParser(description="DropSort core CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     subparsers.add_parser("check-environment")
@@ -23,6 +23,9 @@ def build_parser() -> argparse.ArgumentParser:
     summary_file = subparsers.add_parser("summarize-file")
     summary_file.add_argument("path")
     _add_summary_options(summary_file)
+
+    extract_file = subparsers.add_parser("extract-file-text")
+    extract_file.add_argument("path")
 
     scan_folder = subparsers.add_parser("scan-folder")
     scan_folder.add_argument("path")
@@ -81,6 +84,11 @@ async def _dispatch(args: argparse.Namespace) -> dict:
                 "length": args.length,
                 "instruction": args.instruction,
             },
+        )
+    elif args.command == "extract-file-text":
+        request = RequestEnvelope(
+            type="ExtractFileText",
+            payload={"path": args.path},
         )
     elif args.command == "scan-folder":
         request = RequestEnvelope(

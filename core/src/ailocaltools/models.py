@@ -7,6 +7,7 @@ RequestType = Literal[
     "CheckEnvironment",
     "SummarizeClipboard",
     "SummarizeFile",
+    "ExtractFileText",
     "ScanFolder",
     "ApplyOrganizerSuggestions",
     "ListRecentResults",
@@ -28,6 +29,15 @@ class SummaryResult:
     length: str
     summary_text: str
     source_kind: str
+    created_at: str
+
+
+@dataclass(slots=True)
+class ExtractedTextResult:
+    title: str
+    source_kind: str
+    extracted_text: str
+    evidence_summary: str
     created_at: str
 
 

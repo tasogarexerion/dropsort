@@ -69,7 +69,7 @@ class ReleaseScriptTests(unittest.TestCase):
                 },
             )
 
-            app_dir = build_dir / "AppleLocalOrganizer.app"
+            app_dir = build_dir / "DropSort.app"
             self.assertTrue((app_dir / "Contents/MacOS/AppleLocalOrganizerApp").exists())
             self.assertTrue((app_dir / "Contents/Resources/python-runtime/bin/python3").exists())
             self.assertTrue((app_dir / "Contents/Resources/python/ailocaltools").exists())
@@ -106,7 +106,7 @@ class ReleaseScriptTests(unittest.TestCase):
                 },
             )
 
-            app_dir = build_dir / "AppleLocalOrganizer.app"
+            app_dir = build_dir / "DropSort.app"
             subprocess.run(
                 ["zsh", str(ROOT / "release/sign_app.sh"), "--dry-run", "--app", str(app_dir)],
                 check=True,
@@ -162,7 +162,7 @@ class ReleaseScriptTests(unittest.TestCase):
                 },
             )
 
-            app_dir = build_dir / "AppleLocalOrganizer.app"
+            app_dir = build_dir / "DropSort.app"
             subprocess.run(
                 ["zsh", str(ROOT / "release/sign_app.sh"), "--dry-run", "--app", str(app_dir)],
                 check=True,
@@ -183,7 +183,7 @@ class ReleaseScriptTests(unittest.TestCase):
             temp_root = Path(temp_dir)
             build_dir = temp_root / "build"
             build_dir.mkdir()
-            artifact = build_dir / "AppleLocalOrganizer.dmg"
+            artifact = build_dir / "DropSort.dmg"
             artifact.write_text("stub", encoding="utf-8")
 
             subprocess.run(
@@ -213,10 +213,10 @@ class ReleaseScriptTests(unittest.TestCase):
     def test_prepare_github_release_writes_notes_and_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)
-            app_dir = temp_root / "AppleLocalOrganizer.app"
+            app_dir = temp_root / "DropSort.app"
             (app_dir / "Contents/MacOS").mkdir(parents=True)
             make_executable(app_dir / "Contents/MacOS/AppleLocalOrganizerApp", "#!/bin/zsh\nexit 0\n")
-            dmg_path = temp_root / "AppleLocalOrganizer.dmg"
+            dmg_path = temp_root / "DropSort.dmg"
             dmg_path.write_text("stub dmg", encoding="utf-8")
             output_dir = temp_root / "github-release"
 

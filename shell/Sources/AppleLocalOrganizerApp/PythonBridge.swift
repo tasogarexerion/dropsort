@@ -30,9 +30,16 @@ actor PythonBridge {
         return try await send(RequestEnvelope(type: "SummarizeFile", payload: payload), as: SummaryResult.self)
     }
 
+    func extractFileText(path: String) async throws -> ExtractedTextResult {
+        try await send(
+            RequestEnvelope(type: "ExtractFileText", payload: ["path": path]),
+            as: ExtractedTextResult.self
+        )
+    }
+
     func summarizeText(text: String, style: String, length: String, instruction: String?) async throws -> SummaryResult {
         let tempDirectory = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-            .appendingPathComponent("apple-local-organizer-service", isDirectory: true)
+            .appendingPathComponent("dropsort-service", isDirectory: true)
         try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
         let tempFile = tempDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("txt")
         try text.write(to: tempFile, atomically: true, encoding: .utf8)

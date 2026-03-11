@@ -3,10 +3,10 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="${APPLE_LOCAL_AI_RELEASE_BUILD_DIR:-$ROOT_DIR/release/build}"
-APP_DIR="${APPLE_LOCAL_AI_APP_PATH:-$BUILD_DIR/AppleLocalOrganizer.app}"
+APP_DIR="${APPLE_LOCAL_AI_APP_PATH:-$BUILD_DIR/DropSort.app}"
 STAGING_DIR="$BUILD_DIR/dmg-staging"
-DMG_PATH="${APPLE_LOCAL_AI_DMG_PATH:-$BUILD_DIR/AppleLocalOrganizer.dmg}"
-VOLNAME="Apple Local Organizer"
+DMG_PATH="${APPLE_LOCAL_AI_DMG_PATH:-$BUILD_DIR/DropSort.dmg}"
+VOLNAME="DropSort"
 DRY_RUN=0
 
 while [[ $# -gt 0 ]]; do

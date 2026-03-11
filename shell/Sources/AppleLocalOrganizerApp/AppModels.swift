@@ -38,6 +38,16 @@ struct SummaryResult: Codable, Identifiable, Sendable {
     var id: String { "\(created_at)-\(title)" }
 }
 
+struct ExtractedTextResult: Codable, Identifiable, Sendable {
+    let title: String
+    let source_kind: String
+    let extracted_text: String
+    let evidence_summary: String
+    let created_at: String
+
+    var id: String { "\(created_at)-\(title)" }
+}
+
 struct OrganizerSuggestion: Codable, Identifiable, Sendable {
     let source_path: String
     let target_folder_name: String
