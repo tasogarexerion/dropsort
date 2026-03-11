@@ -65,6 +65,8 @@ DMG_NAME="$(basename "$DMG_PATH")"
 SHA256="$(shasum -a 256 "$DMG_PATH" | awk '{print $1}')"
 NOTES_PATH="$OUTPUT_DIR/GITHUB_RELEASE_NOTES.md"
 MANIFEST_PATH="$OUTPUT_DIR/github-release-manifest.json"
+PUBLIC_REPO_URL="${APPLE_LOCAL_AI_PUBLIC_REPO_URL:-https://github.com/tasogarexerion/apple-local-organizer}"
+SCREENSHOT_URL="${APPLE_LOCAL_AI_RELEASE_SCREENSHOT_URL:-https://raw.githubusercontent.com/tasogarexerion/apple-local-organizer/main/docs/images/release-preview.png}"
 
 DMG_PATH_ENV="$DMG_PATH" \
 APP_DIR_ENV="$APP_DIR" \
@@ -75,6 +77,8 @@ TAG_NAME_ENV="$TAG_NAME" \
 DMG_NAME_ENV="$DMG_NAME" \
 SHA256_ENV="$SHA256" \
 SIGNATURE_MODE_ENV="$SIGNATURE_MODE" \
+PUBLIC_REPO_URL_ENV="$PUBLIC_REPO_URL" \
+SCREENSHOT_URL_ENV="$SCREENSHOT_URL" \
 python3 - <<'PY'
 import json
 import os
@@ -84,6 +88,8 @@ signature_mode = os.environ["SIGNATURE_MODE_ENV"]
 dmg_name = os.environ["DMG_NAME_ENV"]
 tag_name = os.environ["TAG_NAME_ENV"]
 sha256 = os.environ["SHA256_ENV"]
+public_repo_url = os.environ["PUBLIC_REPO_URL_ENV"]
+screenshot_url = os.environ["SCREENSHOT_URL_ENV"]
 
 if signature_mode == "developer-id":
     install_note = "Developer ID 署名済みです。Gatekeeper の警告は最小限の想定です。"
@@ -97,6 +103,8 @@ else:
 notes = f"""# Apple Local Organizer {tag_name}
 
 Apple Intelligence を使った、ローカル要約と Finder 整理提案の macOS メニューバーアプリです。
+
+![Preview image]({screenshot_url})
 
 ## 配布物
 
@@ -128,6 +136,12 @@ Apple Intelligence を使った、ローカル要約と Finder 整理提案の m
 
 - 個人利用、教育利用、研究利用、評価目的での利用は許可します。
 - 商用利用は要問い合わせです。詳細は同梱またはリポジトリ上の `LICENSE` を確認してください。
+
+## フィードバックと問い合わせ
+
+- 不具合報告は GitHub Issues を使ってください: {public_repo_url}/issues
+- 使い方の質問や改善アイデアは GitHub Discussions を想定しています
+- 現時点で Discussions が未有効な場合は、当面は Issues にまとめてください
 
 ## フィードバック観点
 

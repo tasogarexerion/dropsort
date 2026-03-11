@@ -3,6 +3,8 @@
 Apple Intelligence の Foundation Models と Vision を使って、ローカル要約と Finder 整理提案を行う macOS 向けプロジェクトです。
 クリップボード、テキスト、PDF、画像を日本語で要約し、`Desktop` / `Downloads` の整理候補をレビューできます。
 
+![Apple Local Organizer preview](docs/images/release-preview.png)
+
 このリポジトリは現在、開発者向けの public preview 段階です。
 配布は `ad-hoc` 署名のプレビューを前提に進めており、Developer ID 署名と notarization は後段で差し替え可能な構成にしています。
 
@@ -97,3 +99,8 @@ release/prepare_github_release.sh --tag "preview-YYYY-MM-DD"
 
 商用利用の相談は、まず GitHub Issues / Discussions / プロフィール経由の連絡を前提にしています。
 有償サービスへの組み込み、社内業務での本番利用、SaaS / API 提供、販売物への同梱などは、事前問い合わせの対象です。
+
+## フィードバック
+
+不具合報告は GitHub Issues を使ってください。
+使い方の質問や改善アイデアの整理先としては GitHub Discussions を想定していますが、現時点では未有効のため、当面は Issues にまとめてください。
