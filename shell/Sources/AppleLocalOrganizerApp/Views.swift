@@ -377,6 +377,9 @@ struct PreferencesView: View {
             }
 
             Section("Background Services") {
+                Text("既定では安定優先のため、重い自動 review はオフです。まずは Quick Sort と右クリック操作を主導線にしています。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                 Toggle("Watch Desktop", isOn: $state.watchDesktopEnabled)
                 Toggle("Watch Downloads", isOn: $state.watchDownloadsEnabled)
                 Toggle("Summarize Screenshots", isOn: $state.watchScreenshotsEnabled)

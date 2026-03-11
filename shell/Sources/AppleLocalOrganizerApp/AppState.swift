@@ -10,15 +10,16 @@ final class AppState: ObservableObject {
     @AppStorage("defaultStyle") var defaultStyle = "bullets"
     @AppStorage("defaultLength") var defaultLength = "short"
     @AppStorage("extraInstruction") var extraInstruction = ""
-    @AppStorage("watchDesktopEnabled") var watchDesktopEnabled = true
-    @AppStorage("watchDownloadsEnabled") var watchDownloadsEnabled = true
-    @AppStorage("watchClipboardEnabled") var watchClipboardEnabled = true
-    @AppStorage("watchScreenshotsEnabled") var watchScreenshotsEnabled = true
-    @AppStorage("watchPDFInboxEnabled") var watchPDFInboxEnabled = true
+    @AppStorage("watchDesktopEnabled") var watchDesktopEnabled = false
+    @AppStorage("watchDownloadsEnabled") var watchDownloadsEnabled = false
+    @AppStorage("watchClipboardEnabled") var watchClipboardEnabled = false
+    @AppStorage("watchScreenshotsEnabled") var watchScreenshotsEnabled = false
+    @AppStorage("watchPDFInboxEnabled") var watchPDFInboxEnabled = false
     @AppStorage("backgroundNotificationsEnabled") var backgroundNotificationsEnabled = true
     @AppStorage("autoApplySuggestedTagsOnMove") var autoApplySuggestedTagsOnMove = true
     @AppStorage("watcherIntervalSeconds") var watcherIntervalSeconds = 30
     @AppStorage("clipboardInsightMinimumLength") var clipboardInsightMinimumLength = 240
+    @AppStorage("backgroundStabilityProfileVersion") var backgroundStabilityProfileVersion = 0
 
     @Published var environmentStatus = EnvironmentStatus(
         shell_supported: true,
@@ -41,6 +42,7 @@ final class AppState: ObservableObject {
     private var desktopDebounceTask: Task<Void, Never>?
     private var downloadsDebounceTask: Task<Void, Never>?
     private var clipboardWatcherTask: Task<Void, Never>?
+    private var backgroundTaskChain: Task<Void, Never>?
     private var pendingDesktopPaths = Set<String>()
     private var pendingDownloadsPaths = Set<String>()
     private var backgroundReviewInFlight = Set<ScanTarget>()
@@ -69,7 +71,7 @@ final class AppState: ObservableObject {
     var backgroundServiceStatusText: String {
         let services = activeBackgroundServices()
         guard !services.isEmpty else {
-            return "Background services are off."
+            return "Background services are off. Use Quick Sort or enable a specific watcher in Preferences."
         }
         var detail = "Background: \(services.joined(separator: " / "))"
         if watchClipboardEnabled {
@@ -79,6 +81,7 @@ final class AppState: ObservableObject {
     }
 
     func bootstrap() async {
+        applyStabilityProfileIfNeeded()
         await refreshStatus()
         await loadRecents()
         await configureBackgroundServices()
@@ -406,9 +409,11 @@ final class AppState: ObservableObject {
         desktopDebounceTask?.cancel()
         downloadsDebounceTask?.cancel()
         clipboardWatcherTask?.cancel()
+        backgroundTaskChain?.cancel()
         desktopDebounceTask = nil
         downloadsDebounceTask = nil
         clipboardWatcherTask = nil
+        backgroundTaskChain = nil
         pendingDesktopPaths.removeAll()
         pendingDownloadsPaths.removeAll()
     }
@@ -429,11 +434,6 @@ final class AppState: ObservableObject {
                 desktopEventStream = stream
             case .downloads:
                 downloadsEventStream = stream
-            }
-            Task { @MainActor [weak self] in
-                if self?.monitorEnabled(for: target) == true {
-                    await self?.performBackgroundReview(for: target, changedFilesCount: 0, sendUserNotification: false)
-                }
             }
         } catch {
             lastError = error.localizedDescription
@@ -513,35 +513,49 @@ final class AppState: ObservableObject {
                 continue
             }
             lastClipboardFingerprint = currentFingerprint
-            await summarizeClipboardInsight(text)
+            enqueueBackgroundTask { [weak self] in
+                await self?.summarizeClipboardInsight(text)
+            }
         }
     }
 
     private func handleFolderChanges(_ changedPaths: [String], for target: ScanTarget) async {
-        if target == .desktop, watchScreenshotsEnabled {
-            for path in changedPaths where isScreenshotFile(path) {
-                await summarizeBackgroundFile(
-                    path,
+        if target == .desktop,
+           watchScreenshotsEnabled,
+           let screenshotPath = changedPaths.first(where: isScreenshotFile) {
+            enqueueBackgroundTask { [weak self] in
+                await self?.summarizeBackgroundFile(
+                    screenshotPath,
                     titlePrefix: "スクリーンショットを要約",
                     instruction: "新着スクリーンショットを素早く把握できる短い日本語要約にしてください。"
                 )
             }
         }
-        if target == .downloads, watchPDFInboxEnabled {
-            for path in changedPaths where path.lowercased().hasSuffix(".pdf") {
-                await summarizeBackgroundFile(
-                    path,
+        if target == .downloads,
+           watchPDFInboxEnabled,
+           let pdfPath = changedPaths.first(where: { $0.lowercased().hasSuffix(".pdf") }) {
+            enqueueBackgroundTask { [weak self] in
+                await self?.summarizeBackgroundFile(
+                    pdfPath,
                     titlePrefix: "新着 PDF を要約",
                     instruction: "ダウンロード直後の PDF を素早く判断できる短い日本語要約にしてください。"
                 )
             }
         }
         if monitorEnabled(for: target) {
-            await performBackgroundReview(
-                for: target,
-                changedFilesCount: changedPaths.count,
-                sendUserNotification: true
-            )
+            guard changedPaths.count <= 12 else {
+                let detail = "\(changedPaths.count) 件の変更を検知しました。自動 review は抑止し、Quick Sort を待機します。"
+                lastNotice = detail
+                appendBackgroundEvent(title: "\(target.rawValue) の大量変更を検知", detail: detail)
+                return
+            }
+            enqueueBackgroundTask { [weak self] in
+                await self?.performBackgroundReview(
+                    for: target,
+                    changedFilesCount: changedPaths.count,
+                    sendUserNotification: true
+                )
+            }
         }
     }
 
@@ -727,6 +741,32 @@ final class AppState: ObservableObject {
     private func fingerprint(for text: String) -> String {
         let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return "\(cleaned.count)|\(cleaned.prefix(160))"
+    }
+
+    private func applyStabilityProfileIfNeeded() {
+        guard backgroundStabilityProfileVersion < 1 else {
+            return
+        }
+        watchDesktopEnabled = false
+        watchDownloadsEnabled = false
+        watchClipboardEnabled = false
+        watchScreenshotsEnabled = false
+        watchPDFInboxEnabled = false
+        watcherIntervalSeconds = max(watcherIntervalSeconds, 45)
+        clipboardInsightMinimumLength = max(clipboardInsightMinimumLength, 480)
+        backgroundStabilityProfileVersion = 1
+        lastNotice = "安定優先の常駐設定に切り替えました。Quick Sort と右クリック操作が主導線です。"
+    }
+
+    private func enqueueBackgroundTask(_ operation: @escaping @MainActor () async -> Void) {
+        let previous = backgroundTaskChain
+        backgroundTaskChain = Task { @MainActor in
+            _ = await previous?.result
+            guard !Task.isCancelled else {
+                return
+            }
+            await operation()
+        }
     }
 
     private func shouldAnalyzeClipboard(_ text: String) -> Bool {
