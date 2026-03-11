@@ -39,6 +39,7 @@ class OrganizerSuggestion:
     reason_ja: str
     evidence_summary: str
     confidence: float
+    suggested_tags: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)

@@ -11,6 +11,10 @@ struct MenuContentView: View {
 
             statusBlock
 
+            Text(state.backgroundServiceStatusText)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
             Button("Summarize Clipboard") {
                 Task { await state.summarizeClipboard() }
             }
@@ -66,6 +70,24 @@ struct MenuContentView: View {
                 Text(lastNotice)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+            }
+
+            if !state.backgroundEvents.isEmpty {
+                Divider()
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Background Activity")
+                        .font(.subheadline.weight(.semibold))
+                    ForEach(Array(state.backgroundEvents.prefix(3))) { event in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(event.title)
+                                .font(.footnote.weight(.semibold))
+                            Text(event.detail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+                    }
+                }
             }
         }
         .padding(14)
@@ -146,6 +168,11 @@ struct SuggestionRow: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 
+            if !suggestion.suggested_tags.isEmpty {
+                Text("タグ候補: \(suggestion.suggested_tags.joined(separator: ", "))")
+                    .font(.footnote)
+            }
+
             HStack {
                 Button("Move Now") {
                     Task { await state.applySuggestion(suggestion, for: target) }
@@ -159,6 +186,14 @@ struct SuggestionRow: View {
                 }
                 Button("Copy Reason") {
                     state.copy(suggestion.reason_ja)
+                }
+                if !suggestion.suggested_tags.isEmpty {
+                    Button("Apply Tags") {
+                        Task { await state.applySuggestedTags(suggestion) }
+                    }
+                    Button("Copy Tags") {
+                        state.copy(suggestion.suggested_tags.joined(separator: ", "))
+                    }
                 }
             }
             .buttonStyle(.bordered)
@@ -223,8 +258,26 @@ struct StatusView: View {
             LabeledContent("OS", value: state.environmentStatus.os_version)
             LabeledContent("Shell", value: state.environmentStatus.shell_supported ? "Supported" : "Unsupported")
             LabeledContent("AI", value: state.environmentStatus.ai_supported ? "Enabled" : "Disabled")
+            Text(state.backgroundServiceStatusText)
+                .foregroundStyle(.secondary)
             Text(state.environmentStatus.reason)
                 .foregroundStyle(.secondary)
+            if !state.backgroundEvents.isEmpty {
+                Divider()
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Recent Background Activity")
+                        .font(.headline)
+                    ForEach(Array(state.backgroundEvents.prefix(5))) { event in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(event.title)
+                                .font(.subheadline.weight(.semibold))
+                            Text(event.detail)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
             Spacer()
         }
         .padding()
@@ -237,24 +290,50 @@ struct PreferencesView: View {
 
     var body: some View {
         Form {
-            Picker("Default Style", selection: $state.defaultStyle) {
-                Text("plain").tag("plain")
-                Text("bullets").tag("bullets")
-                Text("action-items").tag("action-items")
-                Text("title-and-summary").tag("title-and-summary")
+            Section("Summary Defaults") {
+                Picker("Default Style", selection: $state.defaultStyle) {
+                    Text("plain").tag("plain")
+                    Text("bullets").tag("bullets")
+                    Text("action-items").tag("action-items")
+                    Text("title-and-summary").tag("title-and-summary")
+                }
+                Picker("Default Length", selection: $state.defaultLength) {
+                    Text("short").tag("short")
+                    Text("medium").tag("medium")
+                    Text("long").tag("long")
+                }
+                TextField("Additional Instruction", text: $state.extraInstruction, axis: .vertical)
+                    .lineLimit(3...6)
             }
-            Picker("Default Length", selection: $state.defaultLength) {
-                Text("short").tag("short")
-                Text("medium").tag("medium")
-                Text("long").tag("long")
+
+            Section("Background Services") {
+                Toggle("Watch Desktop", isOn: $state.watchDesktopEnabled)
+                Toggle("Watch Downloads", isOn: $state.watchDownloadsEnabled)
+                Toggle("Summarize Screenshots", isOn: $state.watchScreenshotsEnabled)
+                Toggle("Watch PDF Inbox", isOn: $state.watchPDFInboxEnabled)
+                Toggle("Clipboard Insight", isOn: $state.watchClipboardEnabled)
+                Toggle("Notifications", isOn: $state.backgroundNotificationsEnabled)
+                Toggle("Auto Apply Suggested Tags On Move", isOn: $state.autoApplySuggestedTagsOnMove)
+                Stepper("Polling Interval: \(state.watcherIntervalSeconds)s", value: $state.watcherIntervalSeconds, in: 10...300, step: 5)
+                Stepper(
+                    "Clipboard Min Length: \(state.clipboardInsightMinimumLength)",
+                    value: $state.clipboardInsightMinimumLength,
+                    in: 80...2000,
+                    step: 40
+                )
+                Text(state.backgroundServiceStatusText)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
-            TextField("Additional Instruction", text: $state.extraInstruction, axis: .vertical)
-                .lineLimit(3...6)
+
             Text("AI が使えない環境では互換シェルとして動作します。")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
+        .onChange(of: state.backgroundSettingsSignature) { _, _ in
+            Task { await state.configureBackgroundServices() }
+        }
         .padding()
-        .frame(width: 420)
+        .frame(width: 460)
     }
 }

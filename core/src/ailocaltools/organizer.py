@@ -53,6 +53,7 @@ def scan_folder(
                 reason_ja=reason,
                 evidence_summary=evidence.evidence_summary,
                 confidence=round(confidence, 2),
+                suggested_tags=suggest_tags(item, folder, evidence.evidence_summary),
             )
         )
 
@@ -202,6 +203,50 @@ def build_reason(path: Path, folder: str, evidence_summary: str) -> tuple[str, f
     if folder in {"Receipts", "Screenshots", "Installers"}:
         confidence += 0.1
     return reason, min(confidence, 0.95)
+
+
+def suggest_tags(path: Path, folder: str, evidence_summary: str) -> list[str]:
+    suffix = path.suffix.lower()
+    lowered_name = path.name.lower()
+    lowered_evidence = evidence_summary.lower()
+    tags: list[str] = []
+
+    if folder == "Screenshots" or "screenshot" in lowered_name or "スクリーンショット" in path.name:
+        tags.extend(["スクリーンショット", "要確認"])
+    elif folder == "Receipts":
+        tags.extend(["領収書", "会計"])
+    elif folder == "Installers":
+        tags.append("インストーラ")
+    elif folder == "Code":
+        tags.append("コード")
+    elif folder == "Documents":
+        tags.append("書類")
+    elif folder == "Meeting Notes":
+        tags.append("議事録")
+    elif folder == "Images":
+        tags.append("画像")
+    elif folder == "Data":
+        tags.append("データ")
+    elif folder == "Media":
+        tags.append("メディア")
+    elif folder == "Design Assets":
+        tags.append("デザイン")
+
+    if suffix == ".pdf":
+        tags.append("PDF")
+    if suffix in IMAGE_EXTENSIONS and "画像" not in tags and "スクリーンショット" not in tags:
+        tags.append("画像")
+    if any(token in lowered_evidence for token in ["invoice", "receipt", "領収", "請求"]):
+        tags.extend(["領収書", "会計"])
+    if any(token in lowered_evidence for token in ["meeting", "minutes", "議事録"]):
+        tags.append("議事録")
+
+    deduped: list[str] = []
+    for tag in tags:
+        cleaned = tag.strip()
+        if cleaned and cleaned not in deduped:
+            deduped.append(cleaned)
+    return deduped[:3]
 
 
 def _sanitize_folder_name(value: str) -> str:

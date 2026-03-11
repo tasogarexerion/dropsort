@@ -43,6 +43,7 @@ class HistoryTests(unittest.TestCase):
                                 reason_ja="test",
                                 evidence_summary="evidence",
                                 confidence=0.8,
+                                suggested_tags=["書類", "要確認"],
                             )
                         ],
                     )
@@ -50,3 +51,4 @@ class HistoryTests(unittest.TestCase):
             recent = store.list_recent_results()
             self.assertEqual(len(recent.organizer_runs), 10)
             self.assertEqual(recent.organizer_runs[0].source_root, "/tmp/run-11")
+            self.assertEqual(recent.organizer_runs[0].suggestions[0].suggested_tags, ["書類", "要確認"])

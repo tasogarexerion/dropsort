@@ -3,7 +3,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ailocaltools.organizer import apply_suggestions, build_reason, scan_folder, suggest_folder_name
+from ailocaltools.organizer import (
+    apply_suggestions,
+    build_reason,
+    scan_folder,
+    suggest_folder_name,
+    suggest_tags,
+)
 
 
 class OrganizerTests(unittest.TestCase):
@@ -19,6 +25,15 @@ class OrganizerTests(unittest.TestCase):
         self.assertIn("Installers", reason)
         self.assertGreater(confidence, 0.5)
 
+    def test_suggest_tags(self) -> None:
+        tags = suggest_tags(
+            Path("/tmp/スクリーンショット 2026-03-11.png"),
+            "Screenshots",
+            "OCR抜粋: 請求書 Invoice",
+        )
+        self.assertIn("スクリーンショット", tags)
+        self.assertIn("領収書", tags)
+
     def test_scan_folder_non_mutating(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -29,6 +44,7 @@ class OrganizerTests(unittest.TestCase):
             after = set(path.name for path in root.iterdir())
             self.assertEqual(before, after)
             self.assertEqual(run.suggestions[0].target_folder_name, "Screenshots")
+            self.assertIn("スクリーンショット", run.suggestions[0].suggested_tags)
 
     def test_apply_suggestions_moves_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

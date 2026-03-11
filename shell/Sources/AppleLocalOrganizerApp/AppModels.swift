@@ -45,6 +45,7 @@ struct OrganizerSuggestion: Codable, Identifiable, Sendable {
     let reason_ja: String
     let evidence_summary: String
     let confidence: Double
+    let suggested_tags: [String]
 
     var id: String { source_path }
 }
@@ -78,6 +79,13 @@ struct OrganizerApplyResult: Codable, Sendable {
 struct RecentResults: Codable, Sendable {
     let summaries: [SummaryResult]
     let organizer_runs: [OrganizerRun]
+}
+
+struct BackgroundEvent: Identifiable, Sendable {
+    let id = UUID()
+    let title: String
+    let detail: String
+    let createdAt: Date
 }
 
 enum ScanTarget: String, Sendable {

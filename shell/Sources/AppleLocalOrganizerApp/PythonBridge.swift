@@ -4,6 +4,12 @@ actor PythonBridge {
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
+    private struct ApplySuggestionPayload: Encodable {
+        let source_path: String
+        let target_folder_name: String
+        let suggested_tags: [String]
+    }
+
     func checkEnvironment() async throws -> EnvironmentStatus {
         try await send(RequestEnvelope(type: "CheckEnvironment"), as: EnvironmentStatus.self)
     }
@@ -47,7 +53,11 @@ actor PythonBridge {
 
     func applySuggestions(sourceRoot: String, suggestions: [OrganizerSuggestion]) async throws -> OrganizerApplyResult {
         let compact = suggestions.map {
-            ["source_path": $0.source_path, "target_folder_name": $0.target_folder_name]
+            ApplySuggestionPayload(
+                source_path: $0.source_path,
+                target_folder_name: $0.target_folder_name,
+                suggested_tags: $0.suggested_tags
+            )
         }
         let data = try encoder.encode(compact)
         guard let suggestionsJSON = String(data: data, encoding: .utf8) else {

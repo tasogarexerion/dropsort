@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 import tempfile
 from contextlib import contextmanager
@@ -69,10 +70,19 @@ class HistoryStore:
                     is_new_folder INTEGER NOT NULL,
                     reason_ja TEXT NOT NULL,
                     evidence_summary TEXT NOT NULL,
-                    confidence REAL NOT NULL
+                    confidence REAL NOT NULL,
+                    suggested_tags TEXT NOT NULL DEFAULT '[]'
                 );
                 """
             )
+            columns = {
+                row["name"]
+                for row in conn.execute("PRAGMA table_info(organizer_suggestions)")
+            }
+            if "suggested_tags" not in columns:
+                conn.execute(
+                    "ALTER TABLE organizer_suggestions ADD COLUMN suggested_tags TEXT NOT NULL DEFAULT '[]'"
+                )
 
     def save_summary(self, result: SummaryResult, keep: int = 20) -> None:
         with self._connect() as conn:
@@ -106,9 +116,9 @@ class HistoryStore:
                 """
                 INSERT INTO organizer_suggestions(
                     run_id, source_path, target_folder_name, is_new_folder, reason_ja,
-                    evidence_summary, confidence
+                    evidence_summary, confidence, suggested_tags
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
@@ -119,6 +129,7 @@ class HistoryStore:
                         item.reason_ja,
                         item.evidence_summary,
                         item.confidence,
+                        json.dumps(item.suggested_tags, ensure_ascii=False),
                     )
                     for item in run.suggestions
                 ],
@@ -204,11 +215,12 @@ class HistoryStore:
                         reason_ja=item["reason_ja"],
                         evidence_summary=item["evidence_summary"],
                         confidence=item["confidence"],
+                        suggested_tags=json.loads(item["suggested_tags"] or "[]"),
                     )
                     for item in conn.execute(
                         """
                         SELECT source_path, target_folder_name, is_new_folder, reason_ja,
-                               evidence_summary, confidence
+                               evidence_summary, confidence, suggested_tags
                         FROM organizer_suggestions
                         WHERE run_id = ?
                         ORDER BY confidence DESC, source_path ASC
