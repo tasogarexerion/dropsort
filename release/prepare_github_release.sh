@@ -116,6 +116,7 @@ Apple Intelligence を使った、ローカル要約と Finder 整理提案の m
 - クリップボードやテキスト / PDF / 画像の日本語要約
 - Desktop / Downloads の整理候補レビューと移動
 - 完全オンデバイス前提の Foundation Models / Vision ワークフロー
+- Finder の右クリックから `このアプリで開く` による要約
 
 ## 動作前提
 

@@ -2,7 +2,8 @@ import SwiftUI
 
 @main
 struct AppleLocalOrganizerApp: App {
-    @StateObject private var state = AppState()
+    @NSApplicationDelegateAdaptor(AgentAppDelegate.self) private var appDelegate
+    @StateObject private var state = AppState.shared
 
     var body: some Scene {
         MenuBarExtra("Apple Local Organizer", systemImage: "sparkles.rectangle.stack") {

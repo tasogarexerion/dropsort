@@ -4,6 +4,8 @@ import SwiftUI
 
 @MainActor
 final class AppState: ObservableObject {
+    static let shared = AppState()
+
     @AppStorage("defaultStyle") var defaultStyle = "bullets"
     @AppStorage("defaultLength") var defaultLength = "short"
     @AppStorage("extraInstruction") var extraInstruction = ""
@@ -23,6 +25,8 @@ final class AppState: ObservableObject {
     @Published var isBusy = false
 
     private let bridge = PythonBridge()
+
+    private init() {}
 
     func bootstrap() async {
         await refreshStatus()
@@ -55,16 +59,7 @@ final class AppState: ObservableObject {
         guard panel.runModal() == .OK, let url = panel.url else {
             return
         }
-        await runBusyTask { [self] in
-            let result = try await self.bridge.summarizeFile(
-                path: url.path,
-                style: self.defaultStyle,
-                length: self.defaultLength,
-                instruction: self.nonEmptyInstruction()
-            )
-            self.latestSummary = result
-            await self.loadRecents()
-        }
+        await summarizeFileAtPath(url.path, presentAlert: true)
     }
 
     func review(_ target: ScanTarget) async {
@@ -124,8 +119,67 @@ final class AppState: ObservableObject {
         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
     }
 
+    func handleOpenedFiles(_ paths: [String]) async {
+        let fileManager = FileManager.default
+        let files = paths.filter { path in
+            var isDirectory: ObjCBool = false
+            guard fileManager.fileExists(atPath: path, isDirectory: &isDirectory) else {
+                return false
+            }
+            return !isDirectory.boolValue
+        }
+
+        guard !files.isEmpty else {
+            lastError = "右クリック連携で受け取った項目に対応ファイルがありませんでした。"
+            return
+        }
+
+        if files.count == 1, let first = files.first {
+            await summarizeFileAtPath(first, presentAlert: true)
+            return
+        }
+
+        await runBusyTask { [self] in
+            for path in files {
+                let result = try await self.bridge.summarizeFile(
+                    path: path,
+                    style: self.defaultStyle,
+                    length: self.defaultLength,
+                    instruction: self.nonEmptyInstruction()
+                )
+                self.latestSummary = result
+            }
+            self.lastNotice = "\(files.count) 件のファイルを要約しました。Recent Results を確認してください。"
+            await self.loadRecents()
+            self.presentAlert(
+                title: "Apple Local Organizer",
+                message: "\(files.count) 件のファイルを要約しました。Recent Results から確認できます。"
+            )
+        }
+    }
+
     private func nonEmptyInstruction() -> String? {
         extraInstruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : extraInstruction
+    }
+
+    private func summarizeFileAtPath(_ path: String, presentAlert: Bool) async {
+        await runBusyTask { [self] in
+            let result = try await self.bridge.summarizeFile(
+                path: path,
+                style: self.defaultStyle,
+                length: self.defaultLength,
+                instruction: self.nonEmptyInstruction()
+            )
+            self.latestSummary = result
+            self.lastNotice = "\(URL(fileURLWithPath: path).lastPathComponent) を要約しました。"
+            await self.loadRecents()
+            if presentAlert {
+                self.presentAlert(
+                    title: result.title,
+                    message: truncated(result.summary_text, limit: 900)
+                )
+            }
+        }
     }
 
     private func applySuggestions(
@@ -155,6 +209,22 @@ final class AppState: ObservableObject {
             return "\(result.moved_count) 件を移動しました。"
         }
         return "\(result.moved_count) 件を移動、\(result.skipped_count) 件をスキップしました。"
+    }
+
+    private func presentAlert(title: String, message: String) {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    private func truncated(_ value: String, limit: Int) -> String {
+        guard value.count > limit else {
+            return value
+        }
+        return String(value.prefix(limit)) + "…"
     }
 
     private func runBusyTask(_ task: @escaping () async throws -> Void) async {

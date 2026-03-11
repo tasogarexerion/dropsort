@@ -73,6 +73,24 @@ function write_info_plist() {
   <string>${BUNDLE_ID}</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>Apple Local Organizer Supported Files</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>public.plain-text</string>
+        <string>net.daringfireball.markdown</string>
+        <string>com.adobe.pdf</string>
+        <string>public.image</string>
+      </array>
+    </dict>
+  </array>
   <key>CFBundleName</key>
   <string>Apple Local Organizer</string>
   <key>CFBundlePackageType</key>
