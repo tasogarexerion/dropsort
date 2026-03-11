@@ -64,6 +64,14 @@ struct MenuContentView: View {
                 }
             }
 
+            Button("フォルダを選んで再整理") {
+                state.reviewChosenFolder(openWindow: openWindow)
+            }
+
+            Button("既存フォルダ名を日本語化") {
+                state.reviewFolderRenameCandidates(openWindow: openWindow)
+            }
+
             Button("最近の結果") {
                 state.presentWindow(
                     id: "recent-results",
@@ -177,6 +185,121 @@ struct ReviewView: View {
         }
         .padding()
         .frame(minWidth: 760, minHeight: 420)
+    }
+}
+
+struct SelectedFolderReviewView: View {
+    @EnvironmentObject private var state: AppState
+
+    var body: some View {
+        let run = state.selectedFolderRun
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("選択フォルダの整理候補")
+                    .font(.title2.bold())
+                Spacer()
+                Button("すべて移動") {
+                    Task { await state.applyAllSuggestionsForSelectedFolder() }
+                }
+                .disabled(run?.suggestions.isEmpty ?? true || state.isBusy)
+                Button("再読み込み") {
+                    Task { await state.reviewSelectedFolder() }
+                }
+                .disabled(state.selectedFolderPath == nil)
+            }
+
+            if let path = state.selectedFolderPath {
+                Text(path)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text("選んだフォルダ直下のファイルを再整理します。適用するには `すべて移動` または各行の `今すぐ移動` を使います。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            if let run {
+                Text(run.started_at)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                List(run.suggestions) { suggestion in
+                    SelectedFolderSuggestionRow(suggestion: suggestion)
+                }
+            } else {
+                ContentUnavailableView("まだフォルダを選んでいません", systemImage: "folder.badge.questionmark")
+            }
+        }
+        .padding()
+        .frame(minWidth: 760, minHeight: 420)
+    }
+}
+
+struct FolderRenameReviewView: View {
+    @EnvironmentObject private var state: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("既存フォルダ名の日本語化候補")
+                    .font(.title2.bold())
+                Spacer()
+                Button("すべて適用") {
+                    Task { await state.applyAllFolderRenames() }
+                }
+                .disabled(state.folderRenameSuggestions.isEmpty || state.isBusy)
+                Button("再読み込み") {
+                    state.refreshFolderRenameSuggestions()
+                }
+                .disabled(state.renameReviewRootPath == nil)
+            }
+
+            if let path = state.renameReviewRootPath {
+                Text(path)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text("英語ベースの既存フォルダ名を、日本語ベースの名称へ整える候補です。適用は手動承認です。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            if state.folderRenameSuggestions.isEmpty {
+                ContentUnavailableView("変更候補はありません", systemImage: "folder")
+            } else {
+                List(state.folderRenameSuggestions) { suggestion in
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text(suggestion.currentName)
+                                .font(.headline)
+                            Image(systemName: "arrow.right")
+                                .foregroundStyle(.secondary)
+                            Text(suggestion.proposedName)
+                                .font(.headline)
+                            Spacer()
+                        }
+                        Text(suggestion.reason)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        HStack {
+                            Button("今すぐ変更") {
+                                Task { await state.applyFolderRename(suggestion) }
+                            }
+                            .disabled(state.isBusy)
+                            Button("Finderで開く") {
+                                state.revealInFinder(path: suggestion.sourcePath)
+                            }
+                            Button("変更後の名前をコピー") {
+                                state.copy(suggestion.proposedName)
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    .padding(.vertical, 6)
+                }
+            }
+        }
+        .padding()
+        .frame(minWidth: 760, minHeight: 380)
     }
 }
 
@@ -311,6 +434,74 @@ struct SuggestionRow: View {
     }
 }
 
+struct SelectedFolderSuggestionRow: View {
+    let suggestion: OrganizerSuggestion
+    @EnvironmentObject private var state: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(URL(fileURLWithPath: suggestion.source_path).lastPathComponent)
+                    .font(.headline)
+                Spacer()
+                Text(priorityText)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(priorityColor)
+                Text("\(Int(suggestion.confidence * 100))%")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Text("提案先: \(suggestion.target_folder_name)\(suggestion.is_new_folder ? " (新規)" : "")")
+                .font(.subheadline)
+            Text(suggestion.reason_ja)
+                .font(.body)
+            Text(suggestion.evidence_summary)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            HStack {
+                Button("今すぐ移動") {
+                    Task { await state.applySuggestionForSelectedFolder(suggestion) }
+                }
+                .disabled(state.isBusy)
+                Button("Finderで開く") {
+                    state.revealInFinder(path: suggestion.source_path)
+                }
+                Button("フォルダ名をコピー") {
+                    state.copy(suggestion.target_folder_name)
+                }
+                Button("理由をコピー") {
+                    state.copy(suggestion.reason_ja)
+                }
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding(.vertical, 6)
+    }
+
+    private var priorityText: String {
+        switch suggestion.priority {
+        case 1:
+            return "高"
+        case 2:
+            return "中"
+        default:
+            return "低"
+        }
+    }
+
+    private var priorityColor: Color {
+        switch suggestion.priority {
+        case 1:
+            return .red
+        case 2:
+            return .orange
+        default:
+            return .secondary
+        }
+    }
+}
+
 struct RecentResultsView: View {
     @EnvironmentObject private var state: AppState
 
@@ -416,7 +607,7 @@ struct PreferencesView: View {
             }
 
             Section("バックグラウンド") {
-                Text("現在の preview では安定運用を優先し、常駐監視を停止しています。Quick Sort と右クリック操作を主導線にしています。")
+                Text("現在の preview では安定運用を優先し、常駐監視を停止しています。`かんたん整理` と右クリック操作を主導線にしています。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 Toggle("デスクトップ監視", isOn: $state.watchDesktopEnabled)

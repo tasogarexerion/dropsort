@@ -41,6 +41,22 @@ struct AppleLocalOrganizerApp: App {
                 }
         }
 
+        WindowGroup("選択フォルダの整理候補", id: "review-folder") {
+            SelectedFolderReviewView()
+                .environmentObject(state)
+                .background(WindowAccessor { window in
+                    state.configurePresentation(for: window)
+                })
+        }
+
+        WindowGroup("既存フォルダ名の日本語化候補", id: "rename-folders") {
+            FolderRenameReviewView()
+                .environmentObject(state)
+                .background(WindowAccessor { window in
+                    state.configurePresentation(for: window)
+                })
+        }
+
         WindowGroup("最近の結果", id: "recent-results") {
             RecentResultsView()
                 .environmentObject(state)

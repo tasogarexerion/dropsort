@@ -32,6 +32,10 @@ final class AppState: ObservableObject {
     @Published var recentResults = RecentResults(summaries: [], organizer_runs: [])
     @Published var downloadsRun: OrganizerRun?
     @Published var desktopRun: OrganizerRun?
+    @Published var selectedFolderRun: OrganizerRun?
+    @Published var selectedFolderPath: String?
+    @Published var folderRenameSuggestions: [FolderRenameSuggestion] = []
+    @Published var renameReviewRootPath: String?
     @Published var lastError: String?
     @Published var lastNotice: String?
     @Published var isBusy = false
@@ -155,36 +159,120 @@ final class AppState: ObservableObject {
     func review(_ target: ScanTarget) async {
         await runBusyTask { [self] in
             let result = try await self.bridge.scanFolder(path: target.defaultPath)
-            switch target {
-            case .downloads:
-                self.downloadsRun = result
-            case .desktop:
-                self.desktopRun = result
-            }
+            self.storeRun(result)
             await self.loadRecents()
         }
+    }
+
+    func reviewChosenFolder(openWindow: OpenWindowAction) {
+        guard let path = chooseFolderPath(prompt: "再整理", message: "再整理したいフォルダを選んでください。") else {
+            return
+        }
+        selectedFolderPath = path
+        presentWindow(
+            id: "review-folder",
+            title: "選択フォルダの整理候補",
+            openWindow: openWindow
+        ) { [weak self] in
+            await self?.reviewSelectedFolder()
+        }
+    }
+
+    func reviewSelectedFolder() async {
+        guard let path = selectedFolderPath else {
+            return
+        }
+        await runBusyTask { [self] in
+            let result = try await self.bridge.scanFolder(path: path)
+            self.storeRun(result)
+            await self.loadRecents()
+        }
+    }
+
+    func reviewFolderRenameCandidates(openWindow: OpenWindowAction) {
+        guard let path = chooseFolderPath(prompt: "日本語化", message: "既存フォルダ名を日本語ベースへ整えたいフォルダを選んでください。") else {
+            return
+        }
+        renameReviewRootPath = path
+        folderRenameSuggestions = buildFolderRenameSuggestions(rootPath: path)
+        lastNotice = folderRenameSuggestions.isEmpty
+            ? "日本語化が必要な既存フォルダは見つかりませんでした。"
+            : "\(folderRenameSuggestions.count) 件のフォルダ名候補を確認できます。"
+        presentWindow(
+            id: "rename-folders",
+            title: "既存フォルダ名の日本語化候補",
+            openWindow: openWindow
+        )
+    }
+
+    func refreshFolderRenameSuggestions() {
+        guard let path = renameReviewRootPath else {
+            return
+        }
+        folderRenameSuggestions = buildFolderRenameSuggestions(rootPath: path)
+        lastNotice = folderRenameSuggestions.isEmpty
+            ? "日本語化が必要な既存フォルダは見つかりませんでした。"
+            : "\(folderRenameSuggestions.count) 件のフォルダ名候補を確認できます。"
     }
 
     func applyAllSuggestions(for target: ScanTarget) async {
         guard let run = currentRun(for: target), !run.suggestions.isEmpty else {
             return
         }
-        await applySuggestions(run.suggestions, sourceRoot: run.source_root, target: target)
+        await applySuggestions(run.suggestions, sourceRoot: run.source_root)
     }
 
     func applySuggestion(_ suggestion: OrganizerSuggestion, for target: ScanTarget) async {
-        await applySuggestions([suggestion], sourceRoot: target.defaultPath, target: target)
+        await applySuggestions([suggestion], sourceRoot: target.defaultPath)
+    }
+
+    func applyAllSuggestionsForSelectedFolder() async {
+        guard let run = selectedFolderRun, !run.suggestions.isEmpty else {
+            return
+        }
+        await applySuggestions(run.suggestions, sourceRoot: run.source_root)
+    }
+
+    func applySuggestionForSelectedFolder(_ suggestion: OrganizerSuggestion) async {
+        guard let sourceRoot = selectedFolderPath ?? selectedFolderRun?.source_root else {
+            return
+        }
+        await applySuggestions([suggestion], sourceRoot: sourceRoot)
+    }
+
+    func applyAllFolderRenames() async {
+        guard let rootPath = renameReviewRootPath, !folderRenameSuggestions.isEmpty else {
+            return
+        }
+        await runBusyTask { [self] in
+            var applied = 0
+            for suggestion in folderRenameSuggestions {
+                if try applyFolderRename(suggestion, under: rootPath) {
+                    applied += 1
+                }
+            }
+            folderRenameSuggestions = buildFolderRenameSuggestions(rootPath: rootPath)
+            lastNotice = applied == 0
+                ? "既存フォルダ名は変更されませんでした。"
+                : "\(applied) 件のフォルダ名を日本語ベースへ変更しました。"
+        }
+    }
+
+    func applyFolderRename(_ suggestion: FolderRenameSuggestion) async {
+        guard let rootPath = renameReviewRootPath else {
+            return
+        }
+        await runBusyTask { [self] in
+            _ = try applyFolderRename(suggestion, under: rootPath)
+            folderRenameSuggestions = buildFolderRenameSuggestions(rootPath: rootPath)
+            lastNotice = "\(suggestion.currentName) を \(suggestion.proposedName) へ変更しました。"
+        }
     }
 
     func quickSort(_ target: ScanTarget) async {
         await runBusyTask { [self] in
             let run = try await self.bridge.scanFolder(path: target.defaultPath)
-            switch target {
-            case .downloads:
-                self.downloadsRun = run
-            case .desktop:
-                self.desktopRun = run
-            }
+            self.storeRun(run)
             guard !run.suggestions.isEmpty else {
                 self.lastNotice = "\(target.rawValue) は整理不要でした。"
                 await self.loadRecents()
@@ -199,12 +287,7 @@ final class AppState: ObservableObject {
                 : 0
             self.lastNotice = "\(target.rawValue) をワンクリック整理しました。\(self.notice(for: result, taggedCount: taggedCount))"
             let refreshed = try await self.bridge.scanFolder(path: target.defaultPath)
-            switch target {
-            case .downloads:
-                self.downloadsRun = refreshed
-            case .desktop:
-                self.desktopRun = refreshed
-            }
+            self.storeRun(refreshed)
             await self.loadRecents()
         }
     }
@@ -394,8 +477,7 @@ final class AppState: ObservableObject {
 
     private func applySuggestions(
         _ suggestions: [OrganizerSuggestion],
-        sourceRoot: String,
-        target: ScanTarget
+        sourceRoot: String
     ) async {
         await runBusyTask { [self] in
             let result = try await self.bridge.applySuggestions(
@@ -406,13 +488,8 @@ final class AppState: ObservableObject {
                 ? self.applySuggestedTagsAfterMove(items: result.items, suggestions: suggestions)
                 : 0
             self.lastNotice = notice(for: result, taggedCount: taggedCount)
-            let refreshed = try await self.bridge.scanFolder(path: target.defaultPath)
-            switch target {
-            case .downloads:
-                self.downloadsRun = refreshed
-            case .desktop:
-                self.desktopRun = refreshed
-            }
+            let refreshed = try await self.bridge.scanFolder(path: sourceRoot)
+            self.storeRun(refreshed)
             await self.loadRecents()
         }
     }
@@ -439,6 +516,116 @@ final class AppState: ObservableObject {
             return value
         }
         return String(value.prefix(limit)) + "…"
+    }
+
+    private func chooseFolderPath(prompt: String, message: String) -> String? {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = prompt
+        panel.message = message
+        guard panel.runModal() == .OK, let url = panel.url else {
+            return nil
+        }
+        return url.path
+    }
+
+    private func storeRun(_ run: OrganizerRun) {
+        if run.source_root == ScanTarget.downloads.defaultPath {
+            downloadsRun = run
+        } else if run.source_root == ScanTarget.desktop.defaultPath {
+            desktopRun = run
+        }
+        if selectedFolderPath == run.source_root {
+            selectedFolderRun = run
+        }
+    }
+
+    private func buildFolderRenameSuggestions(rootPath: String) -> [FolderRenameSuggestion] {
+        let rootURL = URL(fileURLWithPath: rootPath, isDirectory: true)
+        let mapping = englishFolderRenameMapping()
+        let fileManager = FileManager.default
+        guard let items = try? fileManager.contentsOfDirectory(
+            at: rootURL,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        return items.compactMap { url in
+            guard let values = try? url.resourceValues(forKeys: [.isDirectoryKey]),
+                  values.isDirectory == true else {
+                return nil
+            }
+            let currentName = url.lastPathComponent
+            guard let proposedName = mapping[currentName], proposedName != currentName else {
+                return nil
+            }
+            return FolderRenameSuggestion(
+                sourcePath: url.path,
+                currentName: currentName,
+                proposedName: proposedName,
+                reason: "英語ベースの整理フォルダ名を、日本語ベースの名称へそろえる候補です。"
+            )
+        }
+        .sorted { $0.currentName.localizedStandardCompare($1.currentName) == .orderedAscending }
+    }
+
+    private func applyFolderRename(_ suggestion: FolderRenameSuggestion, under rootPath: String) throws -> Bool {
+        let fileManager = FileManager.default
+        let sourceURL = URL(fileURLWithPath: suggestion.sourcePath, isDirectory: true)
+        guard fileManager.fileExists(atPath: sourceURL.path) else {
+            return false
+        }
+        let rootURL = URL(fileURLWithPath: rootPath, isDirectory: true)
+        let destinationURL = nextAvailableDirectoryURL(
+            rootURL.appendingPathComponent(suggestion.proposedName, isDirectory: true)
+        )
+        if sourceURL.path == destinationURL.path {
+            return false
+        }
+        try fileManager.moveItem(at: sourceURL, to: destinationURL)
+        return true
+    }
+
+    private func nextAvailableDirectoryURL(_ url: URL) -> URL {
+        let fileManager = FileManager.default
+        if !fileManager.fileExists(atPath: url.path) {
+            return url
+        }
+        if (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+            return url
+        }
+        let baseName = url.lastPathComponent
+        var counter = 2
+        while true {
+            let candidate = url.deletingLastPathComponent().appendingPathComponent("\(baseName) \(counter)", isDirectory: true)
+            if !fileManager.fileExists(atPath: candidate.path) {
+                return candidate
+            }
+            if (try? candidate.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+                return candidate
+            }
+            counter += 1
+        }
+    }
+
+    private func englishFolderRenameMapping() -> [String: String] {
+        [
+            "Screenshots": "スクリーンショット",
+            "Receipts": "領収書",
+            "Images": "画像",
+            "Installers": "インストーラ",
+            "Code": "コード",
+            "Meeting Notes": "議事録",
+            "Documents": "書類",
+            "Data": "データ",
+            "Media": "メディア",
+            "Design Assets": "デザイン",
+            "Misc": "その他",
+        ]
     }
 
     private func cancelBackgroundServices() {
@@ -584,7 +771,7 @@ final class AppState: ObservableObject {
         }
         if monitorEnabled(for: target) {
             guard changedPaths.count <= 12 else {
-                let detail = "\(changedPaths.count) 件の変更を検知しました。自動 review は抑止し、Quick Sort を待機します。"
+                let detail = "\(changedPaths.count) 件の変更を検知しました。自動 review は抑止し、`かんたん整理` の手動実行を待機します。"
                 lastNotice = detail
                 appendBackgroundEvent(title: "\(target.rawValue) の大量変更を検知", detail: detail)
                 return

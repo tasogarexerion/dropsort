@@ -93,6 +93,14 @@ struct RecentResults: Codable, Sendable {
     let organizer_runs: [OrganizerRun]
 }
 
+struct FolderRenameSuggestion: Identifiable, Sendable {
+    let id = UUID()
+    let sourcePath: String
+    let currentName: String
+    let proposedName: String
+    let reason: String
+}
+
 struct BackgroundEvent: Identifiable, Sendable {
     let id = UUID()
     let title: String
