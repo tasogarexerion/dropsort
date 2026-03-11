@@ -79,3 +79,23 @@ class HandleRequestTests(unittest.IsolatedAsyncioTestCase):
                 )
             self.assertEqual(result["source_root"], str(target.resolve()))
             self.assertEqual(len(result["suggestions"]), 1)
+
+    async def test_apply_suggestions_moves_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target = Path(temp_dir) / "scan"
+            target.mkdir()
+            sample = target / "sample.zip"
+            sample.write_text("binary placeholder", encoding="utf-8")
+            result = await bridge.handle_request(
+                bridge.RequestEnvelope(
+                    type="ApplyOrganizerSuggestions",
+                    payload={
+                        "source_root": str(target),
+                        "suggestions_json": json.dumps(
+                            [{"source_path": str(sample), "target_folder_name": "Installers"}]
+                        ),
+                    },
+                )
+            )
+            self.assertEqual(result["moved_count"], 1)
+            self.assertTrue((target / "Installers" / "sample.zip").exists())

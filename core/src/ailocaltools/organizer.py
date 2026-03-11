@@ -3,12 +3,13 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
 from .history import HistoryStore
 from .ingest import IMAGE_EXTENSIONS, PDF_EXTENSIONS, TEXT_EXTENSIONS, ingest_path
-from .models import OrganizerRun, OrganizerSuggestion
+from .models import OrganizerApplyResult, OrganizerMoveItem, OrganizerRun, OrganizerSuggestion
 from .summary import SummaryClient, generate_japanese_reason
 
 ARCHIVE_EXTENSIONS = {".zip", ".dmg", ".pkg", ".tar", ".gz", ".7z"}
@@ -65,6 +66,94 @@ def scan_folder(
     return run
 
 
+def apply_suggestions(
+    root: str | Path,
+    suggestions: list[dict[str, str]] | list[OrganizerSuggestion],
+) -> OrganizerApplyResult:
+    source_root = Path(root).expanduser().resolve()
+    if not source_root.exists() or not source_root.is_dir():
+        raise NotADirectoryError(f"Folder not found: {source_root}")
+
+    results: list[OrganizerMoveItem] = []
+    moved_count = 0
+    skipped_count = 0
+
+    for raw in suggestions:
+        if isinstance(raw, OrganizerSuggestion):
+            source_path = raw.source_path
+            target_folder_name = raw.target_folder_name
+        else:
+            source_path = raw["source_path"]
+            target_folder_name = raw["target_folder_name"]
+
+        source = Path(source_path).expanduser().resolve()
+        folder_name = _sanitize_folder_name(target_folder_name)
+
+        try:
+            source.relative_to(source_root)
+        except ValueError:
+            skipped_count += 1
+            results.append(
+                OrganizerMoveItem(
+                    source_path=str(source),
+                    destination_path=None,
+                    target_folder_name=folder_name,
+                    status="skipped",
+                    message="対象フォルダ直下のファイルではないため移動しませんでした。",
+                )
+            )
+            continue
+
+        if not source.exists() or not source.is_file():
+            skipped_count += 1
+            results.append(
+                OrganizerMoveItem(
+                    source_path=str(source),
+                    destination_path=None,
+                    target_folder_name=folder_name,
+                    status="skipped",
+                    message="元ファイルが見つからないため移動しませんでした。",
+                )
+            )
+            continue
+
+        target_dir = source_root / folder_name
+        target_dir.mkdir(parents=True, exist_ok=True)
+        destination = _next_available_destination(target_dir / source.name)
+
+        try:
+            shutil.move(str(source), str(destination))
+            moved_count += 1
+            results.append(
+                OrganizerMoveItem(
+                    source_path=str(source),
+                    destination_path=str(destination),
+                    target_folder_name=folder_name,
+                    status="moved",
+                    message=f"{folder_name} へ移動しました。",
+                )
+            )
+        except Exception as exc:
+            skipped_count += 1
+            results.append(
+                OrganizerMoveItem(
+                    source_path=str(source),
+                    destination_path=None,
+                    target_folder_name=folder_name,
+                    status="error",
+                    message=f"移動できませんでした: {exc}",
+                )
+            )
+
+    return OrganizerApplyResult(
+        source_root=str(source_root),
+        applied_at=datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        moved_count=moved_count,
+        skipped_count=skipped_count,
+        items=results,
+    )
+
+
 def suggest_folder_name(path: Path, evidence_summary: str) -> str:
     suffix = path.suffix.lower()
     name = path.stem.lower()
@@ -118,3 +207,16 @@ def build_reason(path: Path, folder: str, evidence_summary: str) -> tuple[str, f
 def _sanitize_folder_name(value: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9 _-]+", "", value).strip()
     return cleaned or "Misc"
+
+
+def _next_available_destination(path: Path) -> Path:
+    if not path.exists():
+        return path
+    stem = path.stem
+    suffix = path.suffix
+    counter = 2
+    while True:
+        candidate = path.with_name(f"{stem} {counter}{suffix}")
+        if not candidate.exists():
+            return candidate
+        counter += 1

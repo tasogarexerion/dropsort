@@ -19,6 +19,7 @@ final class AppState: ObservableObject {
     @Published var downloadsRun: OrganizerRun?
     @Published var desktopRun: OrganizerRun?
     @Published var lastError: String?
+    @Published var lastNotice: String?
     @Published var isBusy = false
 
     private let bridge = PythonBridge()
@@ -79,6 +80,17 @@ final class AppState: ObservableObject {
         }
     }
 
+    func applyAllSuggestions(for target: ScanTarget) async {
+        guard let run = currentRun(for: target), !run.suggestions.isEmpty else {
+            return
+        }
+        await applySuggestions(run.suggestions, sourceRoot: run.source_root, target: target)
+    }
+
+    func applySuggestion(_ suggestion: OrganizerSuggestion, for target: ScanTarget) async {
+        await applySuggestions([suggestion], sourceRoot: target.defaultPath, target: target)
+    }
+
     func loadRecents() async {
         do {
             recentResults = try await bridge.listRecentResults()
@@ -116,10 +128,40 @@ final class AppState: ObservableObject {
         extraInstruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : extraInstruction
     }
 
+    private func applySuggestions(
+        _ suggestions: [OrganizerSuggestion],
+        sourceRoot: String,
+        target: ScanTarget
+    ) async {
+        await runBusyTask { [self] in
+            let result = try await self.bridge.applySuggestions(
+                sourceRoot: sourceRoot,
+                suggestions: suggestions
+            )
+            self.lastNotice = notice(for: result)
+            let refreshed = try await self.bridge.scanFolder(path: target.defaultPath)
+            switch target {
+            case .downloads:
+                self.downloadsRun = refreshed
+            case .desktop:
+                self.desktopRun = refreshed
+            }
+            await self.loadRecents()
+        }
+    }
+
+    private func notice(for result: OrganizerApplyResult) -> String {
+        if result.skipped_count == 0 {
+            return "\(result.moved_count) 件を移動しました。"
+        }
+        return "\(result.moved_count) 件を移動、\(result.skipped_count) 件をスキップしました。"
+    }
+
     private func runBusyTask(_ task: @escaping () async throws -> Void) async {
         isBusy = true
         defer { isBusy = false }
         do {
+            lastError = nil
             try await task()
         } catch {
             lastError = error.localizedDescription

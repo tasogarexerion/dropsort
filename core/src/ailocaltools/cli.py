@@ -27,6 +27,9 @@ def build_parser() -> argparse.ArgumentParser:
     scan_folder = subparsers.add_parser("scan-folder")
     scan_folder.add_argument("path")
 
+    apply_run = subparsers.add_parser("apply-run")
+    apply_run.add_argument("run_json", help="Path to a JSON file created from scan-folder output")
+
     subparsers.add_parser("list-recent")
 
     validate_device_parser = subparsers.add_parser("validate-device")
@@ -83,6 +86,15 @@ async def _dispatch(args: argparse.Namespace) -> dict:
         request = RequestEnvelope(
             type="ScanFolder",
             payload={"path": args.path},
+        )
+    elif args.command == "apply-run":
+        run = json.loads(Path(args.run_json).read_text(encoding="utf-8"))
+        request = RequestEnvelope(
+            type="ApplyOrganizerSuggestions",
+            payload={
+                "source_root": run["source_root"],
+                "suggestions_json": json.dumps(run["suggestions"], ensure_ascii=False),
+            },
         )
     elif args.command == "list-recent":
         request = RequestEnvelope(type="ListRecentResults")

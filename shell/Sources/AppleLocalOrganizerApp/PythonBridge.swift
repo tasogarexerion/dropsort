@@ -28,6 +28,26 @@ actor PythonBridge {
         try await send(RequestEnvelope(type: "ScanFolder", payload: ["path": path]), as: OrganizerRun.self)
     }
 
+    func applySuggestions(sourceRoot: String, suggestions: [OrganizerSuggestion]) async throws -> OrganizerApplyResult {
+        let compact = suggestions.map {
+            ["source_path": $0.source_path, "target_folder_name": $0.target_folder_name]
+        }
+        let data = try encoder.encode(compact)
+        guard let suggestionsJSON = String(data: data, encoding: .utf8) else {
+            throw BridgeFailure.transport("Failed to encode organizer suggestions.")
+        }
+        return try await send(
+            RequestEnvelope(
+                type: "ApplyOrganizerSuggestions",
+                payload: [
+                    "source_root": sourceRoot,
+                    "suggestions_json": suggestionsJSON,
+                ]
+            ),
+            as: OrganizerApplyResult.self
+        )
+    }
+
     func listRecentResults() async throws -> RecentResults {
         try await send(RequestEnvelope(type: "ListRecentResults"), as: RecentResults.self)
     }

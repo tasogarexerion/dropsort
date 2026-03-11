@@ -4,14 +4,13 @@ import asyncio
 import json
 import os
 import sys
-from pathlib import Path
 from typing import Any
 
 from .environment import check_environment
 from .history import HistoryStore
 from .ingest import ingest_clipboard, ingest_path
 from .models import RequestEnvelope, to_dict
-from .organizer import scan_folder
+from .organizer import apply_suggestions, scan_folder
 from .summary import SummaryConfig, summarize_ingested
 
 
@@ -56,6 +55,14 @@ async def handle_request(envelope: RequestEnvelope) -> dict[str, Any]:
             history_store=history,
         )
         return to_dict(run)
+
+    if envelope.type == "ApplyOrganizerSuggestions":
+        suggestions = json.loads(envelope.payload["suggestions_json"])
+        result = apply_suggestions(
+            envelope.payload["source_root"],
+            suggestions=suggestions,
+        )
+        return to_dict(result)
 
     if envelope.type == "ListRecentResults":
         history = _history_store()

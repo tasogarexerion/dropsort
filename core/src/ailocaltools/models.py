@@ -8,6 +8,7 @@ RequestType = Literal[
     "SummarizeClipboard",
     "SummarizeFile",
     "ScanFolder",
+    "ApplyOrganizerSuggestions",
     "ListRecentResults",
 ]
 
@@ -45,6 +46,24 @@ class OrganizerRun:
     source_root: str
     started_at: str
     suggestions: list[OrganizerSuggestion] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class OrganizerMoveItem:
+    source_path: str
+    destination_path: str | None
+    target_folder_name: str
+    status: str
+    message: str
+
+
+@dataclass(slots=True)
+class OrganizerApplyResult:
+    source_root: str
+    applied_at: str
+    moved_count: int
+    skipped_count: int
+    items: list[OrganizerMoveItem] = field(default_factory=list)
 
 
 @dataclass(slots=True)

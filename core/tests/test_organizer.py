@@ -1,10 +1,9 @@
 from __future__ import annotations
-
 import tempfile
 import unittest
 from pathlib import Path
 
-from ailocaltools.organizer import build_reason, scan_folder, suggest_folder_name
+from ailocaltools.organizer import apply_suggestions, build_reason, scan_folder, suggest_folder_name
 
 
 class OrganizerTests(unittest.TestCase):
@@ -30,3 +29,39 @@ class OrganizerTests(unittest.TestCase):
             after = set(path.name for path in root.iterdir())
             self.assertEqual(before, after)
             self.assertEqual(run.suggestions[0].target_folder_name, "Screenshots")
+
+    def test_apply_suggestions_moves_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            target = root / "invoice.pdf"
+            target.write_text("invoice", encoding="utf-8")
+
+            result = apply_suggestions(
+                root,
+                [{"source_path": str(target), "target_folder_name": "Receipts"}],
+            )
+
+            moved = root / "Receipts" / "invoice.pdf"
+            self.assertEqual(result.moved_count, 1)
+            self.assertTrue(moved.exists())
+            self.assertFalse(target.exists())
+
+    def test_apply_suggestions_avoids_overwrite(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "notes.txt"
+            source.write_text("new", encoding="utf-8")
+            receipts = root / "Documents"
+            receipts.mkdir()
+            existing = receipts / "notes.txt"
+            existing.write_text("old", encoding="utf-8")
+
+            result = apply_suggestions(
+                root,
+                [{"source_path": str(source), "target_folder_name": "Documents"}],
+            )
+
+            moved = receipts / "notes 2.txt"
+            self.assertEqual(result.moved_count, 1)
+            self.assertTrue(existing.exists())
+            self.assertTrue(moved.exists())

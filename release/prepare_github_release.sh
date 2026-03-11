@@ -114,7 +114,7 @@ Apple Intelligence を使った、ローカル要約と Finder 整理提案の m
 ## できること
 
 - クリップボードやテキスト / PDF / 画像の日本語要約
-- Desktop / Downloads の整理候補レビュー
+- Desktop / Downloads の整理候補レビューと移動
 - 完全オンデバイス前提の Foundation Models / Vision ワークフロー
 
 ## 動作前提
@@ -128,7 +128,7 @@ Apple Intelligence を使った、ローカル要約と Finder 整理提案の m
 
 ## 既知の前提
 
-- Finder 整理はレビュー専用で、ファイル移動は行いません。
+- Finder 整理はレビュー画面からそのまま適用できます。
 - Foundation Models / Vision の動作確認は実機前提です。
 - 開発者向けプレビューとしての配布を想定しています。
 

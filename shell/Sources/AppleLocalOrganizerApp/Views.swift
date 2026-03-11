@@ -60,6 +60,13 @@ struct MenuContentView: View {
                     .font(.footnote)
                     .foregroundStyle(.red)
             }
+
+            if let lastNotice = state.lastNotice {
+                Divider()
+                Text(lastNotice)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding(14)
         .frame(width: 340)
@@ -81,22 +88,31 @@ struct ReviewView: View {
     @EnvironmentObject private var state: AppState
 
     var body: some View {
+        let run = state.currentRun(for: target)
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text(target.windowTitle)
                     .font(.title2.bold())
                 Spacer()
+                Button("Apply All") {
+                    Task { await state.applyAllSuggestions(for: target) }
+                }
+                .disabled(run?.suggestions.isEmpty ?? true || state.isBusy)
                 Button("Refresh") {
                     Task { await state.review(target) }
                 }
             }
 
-            if let run = state.currentRun(for: target) {
+            Text("提案先フォルダへ実際に移動するには `Apply All` または各行の `Move Now` を使います。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            if let run {
                 Text(run.started_at)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 List(run.suggestions) { suggestion in
-                    SuggestionRow(suggestion: suggestion)
+                    SuggestionRow(target: target, suggestion: suggestion)
                 }
             } else {
                 ContentUnavailableView("No review yet", systemImage: "folder.badge.questionmark")
@@ -108,6 +124,7 @@ struct ReviewView: View {
 }
 
 struct SuggestionRow: View {
+    let target: ScanTarget
     let suggestion: OrganizerSuggestion
     @EnvironmentObject private var state: AppState
 
@@ -130,6 +147,10 @@ struct SuggestionRow: View {
                 .foregroundStyle(.secondary)
 
             HStack {
+                Button("Move Now") {
+                    Task { await state.applySuggestion(suggestion, for: target) }
+                }
+                .disabled(state.isBusy)
                 Button("Open in Finder") {
                     state.revealInFinder(path: suggestion.source_path)
                 }

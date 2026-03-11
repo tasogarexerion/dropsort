@@ -57,6 +57,24 @@ struct OrganizerRun: Codable, Identifiable, Sendable {
     var id: String { "\(started_at)-\(source_root)" }
 }
 
+struct OrganizerMoveItem: Codable, Identifiable, Sendable {
+    let source_path: String
+    let destination_path: String?
+    let target_folder_name: String
+    let status: String
+    let message: String
+
+    var id: String { "\(source_path)-\(destination_path ?? status)" }
+}
+
+struct OrganizerApplyResult: Codable, Sendable {
+    let source_root: String
+    let applied_at: String
+    let moved_count: Int
+    let skipped_count: Int
+    let items: [OrganizerMoveItem]
+}
+
 struct RecentResults: Codable, Sendable {
     let summaries: [SummaryResult]
     let organizer_runs: [OrganizerRun]
