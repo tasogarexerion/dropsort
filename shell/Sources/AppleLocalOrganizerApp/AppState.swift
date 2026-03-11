@@ -133,7 +133,8 @@ final class AppState: ObservableObject {
         }
     }
 
-    func summarizeClipboard() async {
+    func summarizeClipboard(openWindow: OpenWindowAction) async {
+        let previousSummaryID = latestSummary?.id
         await runBusyTask { [self] in
             let result = try await self.bridge.summarizeClipboard(
                 style: self.defaultStyle,
@@ -141,17 +142,25 @@ final class AppState: ObservableObject {
                 instruction: self.nonEmptyInstruction()
             )
             self.latestSummary = result
+            self.lastNotice = "クリップボードを要約しました。"
             await self.loadRecents()
+        }
+        if latestSummary?.id != previousSummaryID {
+            openLatestSummary(openWindow: openWindow)
         }
     }
 
-    func summarizeFile() async {
+    func summarizeFile(openWindow: OpenWindowAction) async {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else {
             return
         }
-        await summarizeFileAtPath(url.path, presentAlert: true)
+        let previousSummaryID = latestSummary?.id
+        await summarizeFileAtPath(url.path, presentAlert: false)
+        if latestSummary?.id != previousSummaryID {
+            openLatestSummary(openWindow: openWindow)
+        }
     }
 
     func copyExtractedTextFromFile() async {
@@ -507,6 +516,17 @@ final class AppState: ObservableObject {
 
     func activateApp() {
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func openLatestSummary(openWindow: OpenWindowAction) {
+        guard latestSummary != nil else {
+            return
+        }
+        presentWindow(
+            id: "latest-summary",
+            title: "最新の要約",
+            openWindow: openWindow
+        )
     }
 
     func bringWindowToFront(titled title: String) {

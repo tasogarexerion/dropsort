@@ -81,6 +81,14 @@ struct AppleLocalOrganizerApp: App {
                 })
         }
 
+        WindowGroup("最新の要約", id: "latest-summary") {
+            LatestSummaryView()
+                .environmentObject(state)
+                .background(WindowAccessor { window in
+                    state.configurePresentation(for: window)
+                })
+        }
+
         WindowGroup("最近の結果", id: "recent-results") {
             RecentResultsView()
                 .environmentObject(state)

@@ -16,12 +16,12 @@ struct MenuContentView: View {
                 .foregroundStyle(.secondary)
 
             Button("クリップボードを要約") {
-                Task { await state.summarizeClipboard() }
+                Task { await state.summarizeClipboard(openWindow: openWindow) }
             }
             .disabled(!state.environmentStatus.ai_supported || state.isBusy)
 
             Button("ファイルを要約") {
-                Task { await state.summarizeFile() }
+                Task { await state.summarizeFile(openWindow: openWindow) }
             }
             .disabled(!state.environmentStatus.ai_supported || state.isBusy)
 
@@ -106,11 +106,16 @@ struct MenuContentView: View {
 
             if let latestSummary = state.latestSummary {
                 Divider()
+                Button("最新の要約を開く") {
+                    state.openLatestSummary(openWindow: openWindow)
+                }
                 Text(latestSummary.title)
-                    .font(.subheadline.bold())
-                Text(latestSummary.summary_text)
+                    .font(.footnote.weight(.semibold))
+                    .lineLimit(1)
+                Text("\(latestSummary.source_kind) • \(latestSummary.created_at)")
                     .font(.footnote)
-                    .lineLimit(5)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
 
             if let lastError = state.lastError {
@@ -163,6 +168,41 @@ struct MenuContentView: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+struct LatestSummaryView: View {
+    @EnvironmentObject private var state: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if let summary = state.latestSummary {
+                HStack {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(summary.title)
+                            .font(.title2.bold())
+                        Text("\(summary.source_kind) • \(summary.created_at)")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("全文をコピー") {
+                        state.copy(summary.summary_text)
+                    }
+                }
+
+                ScrollView {
+                    Text(summary.summary_text)
+                        .font(.body)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else {
+                ContentUnavailableView("要約結果はまだありません", systemImage: "text.bubble")
+            }
+        }
+        .padding()
+        .frame(minWidth: 720, minHeight: 420)
     }
 }
 
